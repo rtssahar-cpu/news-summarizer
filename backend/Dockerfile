@@ -1,17 +1,19 @@
 FROM python:3.12-slim AS base
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+RUN uv pip install --system --no-cache -r requirements.txt
 
 FROM base AS dev-deps
 COPY requirements-dev.txt .
-RUN pip install --no-cache-dir -r requirements-dev.txt
+RUN uv pip install --system --no-cache -r requirements-dev.txt
 
 FROM dev-deps AS test
-RUN flake8 . && pytest
+COPY . .
+RUN ruff check . && pytest
+
+FROM base AS production
+COPY . .
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
