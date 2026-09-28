@@ -1,14 +1,13 @@
 FROM python:3.12-slim AS base
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_PROJECT_ENVIRONMENT=/usr/local
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY requirements.txt .
-RUN uv pip install --system --no-cache -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev
 
 FROM base AS dev-deps
-COPY requirements-dev.txt .
-RUN uv pip install --system --no-cache -r requirements-dev.txt
+RUN uv sync --locked
 
 FROM dev-deps AS test
 COPY . .
