@@ -1,0 +1,7 @@
+[tool.ruff]
+line-length = 100
+exclude = [".venv", "migrations"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
