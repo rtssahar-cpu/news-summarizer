@@ -22,7 +22,7 @@ package = false
 
 [tool.ruff]
 line-length = 100
-exclude = [".venv", "migrations"]
+exclude = [".venv"]
 
 [tool.pytest.ini_options]
 python_files = ["test_*.py", "*_tests.py"]
