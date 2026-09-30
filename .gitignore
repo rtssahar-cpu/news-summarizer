@@ -13,3 +13,6 @@ frontend/dist/
 .vscode/
 .idea/
 .DS_Store
+
+# Production secrets
+.env.production
