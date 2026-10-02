@@ -5,6 +5,10 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
 def build_database_url() -> str:
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     user = os.environ.get("POSTGRES_USER", "newssummarizer")
     password = os.environ.get("POSTGRES_PASSWORD", "newssummarizer")
     host = os.environ.get("POSTGRES_HOST", "db")
