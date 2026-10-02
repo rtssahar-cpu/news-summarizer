@@ -13,3 +13,6 @@ frontend/dist/
 .vscode/
 .idea/
 .DS_Store
+
+# Local environment variables
+.env
