@@ -1,0 +1,98 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}/backend
+  RESOURCE_GROUP: news-summarizer-rg
+  ACA_ENV: news-summarizer-env
+  ACA_APP: news-summarizer-backend
+
+jobs:
+  test:
+    name: Lint & test (via Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build test image (lint + test)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          target: test
+          push: false
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+  deploy:
+    name: Build, push & deploy
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          target: production
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure Container Apps
+        run: |
+          set -e
+          if az containerapp show --name "$ACA_APP" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+            az containerapp secret set \
+              --name "$ACA_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --secrets database-url="${{ secrets.NEON_DATABASE_URL }}"
+
+            az containerapp update \
+              --name "$ACA_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --image "$IMAGE:${{ github.sha }}" \
+              --set-env-vars DATABASE_URL=secretref:database-url
+          else
+            az containerapp create \
+              --name "$ACA_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --environment "$ACA_ENV" \
+              --image "$IMAGE:${{ github.sha }}" \
+              --target-port 8000 \
+              --ingress external \
+              --min-replicas 0 \
+              --max-replicas 1 \
+              --secrets database-url="${{ secrets.NEON_DATABASE_URL }}" \
+              --env-vars DATABASE_URL=secretref:database-url
+          fi
