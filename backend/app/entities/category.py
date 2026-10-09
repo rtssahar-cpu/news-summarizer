@@ -1,0 +1,25 @@
+from enum import StrEnum
+
+
+class Category(StrEnum):
+    JP_EQUIPMENT_NEW_DEVELOPMENT = "jp_equipment_new_development"
+    CONTRACTOR_MITSUBISHI_HEAVY = "contractor_mitsubishi_heavy"
+    CONTRACTOR_KAWASAKI_HEAVY = "contractor_kawasaki_heavy"
+    CONTRACTOR_SUBARU = "contractor_subaru"
+    CONTRACTOR_IHI = "contractor_ihi"
+    CONTRACTOR_MITSUBISHI_ELECTRIC = "contractor_mitsubishi_electric"
+    CONTRACTOR_NEC = "contractor_nec"
+    CONTRACTOR_FUJITSU = "contractor_fujitsu"
+    CONTRACTOR_HITACHI = "contractor_hitachi"
+    UNMANNED_UUV = "unmanned_uuv"
+    UNMANNED_USV = "unmanned_usv"
+    UNMANNED_UGV = "unmanned_ugv"
+    UNMANNED_UAV = "unmanned_uav"
+    UNMANNED_LOITERING_MUNITION = "unmanned_loitering_munition"
+    AIR_DEFENSE_SYSTEM = "air_defense_system"
+    AMD_IAMD = "amd_iamd"
+    STANDOFF_MISSILE = "standoff_missile"
+    ELECTRONIC_WARFARE = "electronic_warfare"
+    EARLY_WARNING_AIRCRAFT = "early_warning_aircraft"
+    MINISTER_STATEMENT = "minister_statement"
+    THREE_DOCUMENTS = "three_documents"
