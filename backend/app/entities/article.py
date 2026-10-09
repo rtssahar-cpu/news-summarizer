@@ -1,5 +1,7 @@
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+
+from app.entities.category import Category
 
 
 @dataclass
@@ -17,4 +19,7 @@ class Summary:
     id: int | None
     article_id: int
     summary_text: str
-    created_at: datetime
+    matched_categories: list[Category]
+    mentions_price: bool
+    mentions_israel: bool
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
