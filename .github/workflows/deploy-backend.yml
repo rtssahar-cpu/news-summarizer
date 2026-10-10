@@ -1,47 +1,61 @@
 name: Deploy Backend
 
+# CI（ci.yml）の完了後に起動する。テストは CI 側で実施済み
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths:
-      - "backend/**"
-      - ".github/workflows/deploy-backend.yml"
 
 permissions:
   id-token: write
   contents: read
   packages: write
+  actions: read # CI の artifact を読むため
+
+# デプロイを同時に走らせない（実行中のものは中断せず、後続は待機）
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}/backend
+  HEAD_SHA: ${{ github.event.workflow_run.head_sha }} # CI がテストしたコミット
   RESOURCE_GROUP: news-summarizer-rg
   ACA_ENV: news-summarizer-env
   ACA_APP: news-summarizer-backend
 
 jobs:
-  test:
-    name: Lint & test (via Docker)
+  check:
+    name: Check deploy conditions
+    # CI 成功 / main への push 由来 / 同一リポジトリ由来（fork の PR を除外）
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    outputs:
+      backend-changed: ${{ steps.read.outputs.backend }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build test image (lint + test)
-        uses: docker/build-push-action@v6
+      - uses: actions/download-artifact@v4
         with:
-          context: backend
-          target: test
-          push: false
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
+          name: changes
+          path: changes
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: read
+        run: echo "backend=$(cat changes/backend)" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Build, push & deploy
-    needs: test
+    needs: check
+    if: needs.check.outputs.backend-changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.HEAD_SHA }}
 
       - uses: docker/setup-buildx-action@v3
 
@@ -58,11 +72,30 @@ jobs:
           context: backend
           target: production
           push: true
-          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          tags: ${{ env.IMAGE }}:${{ env.HEAD_SHA }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.HEAD_SHA }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
+      # 古い CI が後から完了した場合に、本番を古いコミットで上書きしないようにする
+      - name: Check commit is still the latest on main
+        id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          latest_sha=$(gh api "repos/${{ github.repository }}/commits/main" --jq .sha)
+          if [ "$latest_sha" = "$HEAD_SHA" ]; then
+            echo "is-latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Skip deploy: $HEAD_SHA is not the latest on main ($latest_sha)"
+            echo "is-latest=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Azure login (OIDC)
+        if: steps.latest.outputs.is-latest == 'true'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -70,6 +103,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy to Azure Container Apps
+        if: steps.latest.outputs.is-latest == 'true'
         run: |
           set -e
           if az containerapp show --name "$ACA_APP" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
@@ -81,14 +115,14 @@ jobs:
             az containerapp update \
               --name "$ACA_APP" \
               --resource-group "$RESOURCE_GROUP" \
-              --image "$IMAGE:${{ github.sha }}" \
+              --image "$IMAGE:$HEAD_SHA" \
               --set-env-vars DATABASE_URL=secretref:database-url
           else
             az containerapp create \
               --name "$ACA_APP" \
               --resource-group "$RESOURCE_GROUP" \
               --environment "$ACA_ENV" \
-              --image "$IMAGE:${{ github.sha }}" \
+              --image "$IMAGE:$HEAD_SHA" \
               --target-port 8000 \
               --ingress external \
               --min-replicas 0 \
