@@ -6,6 +6,35 @@ on:
   pull_request:
 
 jobs:
+  # main への push 時のみ、変更パスを判定して deploy ワークフロー向けに artifact で渡す
+  changes:
+    name: Detect changed paths
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/deploy-backend.yml'
+
+      - name: Write change flags
+        env:
+          BACKEND_CHANGED: ${{ steps.filter.outputs.backend }}
+        run: |
+          mkdir -p changes
+          echo "$BACKEND_CHANGED" > changes/backend
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: changes
+          path: changes/
+          retention-days: 1
+
   frontend:
     name: Frontend (lint & build via Docker)
     runs-on: ubuntu-latest
