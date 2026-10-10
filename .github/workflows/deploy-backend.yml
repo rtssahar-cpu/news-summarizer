@@ -22,7 +22,6 @@ env:
   IMAGE: ghcr.io/${{ github.repository }}/backend
   HEAD_SHA: ${{ github.event.workflow_run.head_sha }} # CI がテストしたコミット
   RESOURCE_GROUP: news-summarizer-rg
-  ACA_ENV: news-summarizer-env
   ACA_APP: news-summarizer-backend
 
 jobs:
@@ -104,29 +103,9 @@ jobs:
 
       - name: Deploy to Azure Container Apps
         if: steps.latest.outputs.is-latest == 'true'
+        # インフラ（作成・シークレット・レプリカ数）は CI の管理外。ここではイメージ更新のみ行う
         run: |
-          set -e
-          if az containerapp show --name "$ACA_APP" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-            az containerapp secret set \
-              --name "$ACA_APP" \
-              --resource-group "$RESOURCE_GROUP" \
-              --secrets database-url="${{ secrets.NEON_DATABASE_URL }}"
-
-            az containerapp update \
-              --name "$ACA_APP" \
-              --resource-group "$RESOURCE_GROUP" \
-              --image "$IMAGE:$HEAD_SHA" \
-              --set-env-vars DATABASE_URL=secretref:database-url
-          else
-            az containerapp create \
-              --name "$ACA_APP" \
-              --resource-group "$RESOURCE_GROUP" \
-              --environment "$ACA_ENV" \
-              --image "$IMAGE:$HEAD_SHA" \
-              --target-port 8000 \
-              --ingress external \
-              --min-replicas 0 \
-              --max-replicas 1 \
-              --secrets database-url="${{ secrets.NEON_DATABASE_URL }}" \
-              --env-vars DATABASE_URL=secretref:database-url
-          fi
+          az containerapp update \
+            --name "$ACA_APP" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$IMAGE:$HEAD_SHA"
