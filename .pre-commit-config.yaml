@@ -1,0 +1,12 @@
+# セットアップ: uvx pre-commit install
+# Ruff のバージョンは backend/pyproject.toml の ruff と揃えること（CI との差異を防ぐ）
+# mypy はプロジェクト全体の型情報が必要なため、ここでは実行せず CI で実行する
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.9
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
