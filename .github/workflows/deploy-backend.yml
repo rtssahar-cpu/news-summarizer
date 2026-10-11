@@ -1,9 +1,9 @@
 name: Deploy Backend
 
-# CI（ci.yml）の完了後に起動する。テストは CI 側で実施済み
+# Backend CI（backend-ci.yml）の完了後に起動する。テストは CI 側で実施済み
 on:
   workflow_run:
-    workflows: [CI]
+    workflows: [Backend CI]
     types: [completed]
     branches: [main]
 
@@ -11,7 +11,6 @@ permissions:
   id-token: write
   contents: read
   packages: write
-  actions: read # CI の artifact を読むため
 
 # デプロイを同時に走らせない（実行中のものは中断せず、後続は待機）
 concurrency:
@@ -25,31 +24,13 @@ env:
   ACA_APP: news-summarizer-backend
 
 jobs:
-  check:
-    name: Check deploy conditions
+  deploy:
+    name: Build, push & deploy
     # CI 成功 / main への push 由来 / 同一リポジトリ由来（fork の PR を除外）
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository
-    runs-on: ubuntu-latest
-    outputs:
-      backend-changed: ${{ steps.read.outputs.backend }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: changes
-          path: changes
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - id: read
-        run: echo "backend=$(cat changes/backend)" >> "$GITHUB_OUTPUT"
-
-  deploy:
-    name: Build, push & deploy
-    needs: check
-    if: needs.check.outputs.backend-changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
