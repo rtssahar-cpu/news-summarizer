@@ -1,41 +1,30 @@
 name: Deploy Backend
 
-# Backend CI（backend-ci.yml）の完了後に起動する。テストは CI 側で実施済み
+# 再利用ワークフロー。backend-ci.yml から main への push でテスト成功後に呼ばれる
+# github コンテキストは呼び出し元（push）のものになるため、github.sha はテスト済みのコミット
 on:
-  workflow_run:
-    workflows: [Backend CI]
-    types: [completed]
-    branches: [main]
-
-permissions:
-  id-token: write
-  contents: read
-  packages: write
-
-# デプロイを同時に走らせない（実行中のものは中断せず、後続は待機）
-concurrency:
-  group: deploy-backend
-  cancel-in-progress: false
+  workflow_call:
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}/backend
-  HEAD_SHA: ${{ github.event.workflow_run.head_sha }} # CI がテストしたコミット
+  HEAD_SHA: ${{ github.sha }} # CI がテストしたコミット
   RESOURCE_GROUP: news-summarizer-rg
   ACA_APP: news-summarizer-backend
 
 jobs:
   deploy:
     name: Build, push & deploy
-    # CI 成功 / main への push 由来 / 同一リポジトリ由来（fork の PR を除外）
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    # デプロイを同時に走らせない（実行中のものは中断せず、後続は待機）
+    concurrency:
+      group: deploy-backend
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.HEAD_SHA }}
 
       - uses: docker/setup-buildx-action@v3
 
