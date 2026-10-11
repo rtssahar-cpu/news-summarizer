@@ -1,22 +1,39 @@
 name: Backend CI
 
-# backend 関連の変更時のみ実行する。main への push 時の完了は deploy-backend.yml の起動トリガーになる
+# 必須チェックを常に報告させるため、ワークフローは毎回起動する。
+# backend に変更がなければジョブをスキップする（スキップは必須チェック上「成功」扱い）
 on:
   push:
     branches: [main]
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-ci.yml"
-      - ".github/workflows/deploy-backend.yml"
   pull_request:
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-ci.yml"
-      - ".github/workflows/deploy-backend.yml"
+
+permissions:
+  contents: read
+  pull-requests: read # paths-filter が PR の変更ファイルを API で取得するため
 
 jobs:
+  changes:
+    name: Detect backend changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/backend-ci.yml'
+              - '.github/workflows/deploy-backend.yml'
+
   backend:
+    # Ruleset の必須チェック名と一致させること
     name: Backend (lint & test via Docker)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,3 +48,15 @@ jobs:
           push: false
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
+
+  # main への push で backend のテストが成功した場合のみデプロイする
+  deploy:
+    name: Deploy backend
+    needs: backend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.backend.result == 'success'
+    uses: ./.github/workflows/deploy-backend.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    secrets: inherit
