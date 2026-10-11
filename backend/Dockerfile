@@ -13,6 +13,7 @@ FROM dev-deps AS test
 COPY . .
 # どのチェックで失敗したかをビルドログで判別しやすいよう、RUN を分ける
 RUN ruff check .
+RUN ruff format --check .
 RUN mypy
 RUN pytest
 
