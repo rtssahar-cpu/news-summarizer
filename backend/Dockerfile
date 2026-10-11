@@ -11,7 +11,10 @@ RUN uv sync --locked
 
 FROM dev-deps AS test
 COPY . .
-RUN ruff check . && pytest
+# どのチェックで失敗したかをビルドログで判別しやすいよう、RUN を分ける
+RUN ruff check .
+RUN mypy
+RUN pytest
 
 FROM base AS production
 COPY . .
