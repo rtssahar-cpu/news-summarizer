@@ -1,19 +1,38 @@
 name: Frontend CI
 
+# 必須チェックを常に報告させるため、ワークフローは毎回起動する。
+# frontend に変更がなければジョブをスキップする（スキップは必須チェック上「成功」扱い）
 on:
   push:
     branches: [main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-ci.yml"
   pull_request:
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-ci.yml"
+
+permissions:
+  contents: read
+  pull-requests: read # paths-filter が PR の変更ファイルを API で取得するため
 
 jobs:
+  changes:
+    name: Detect frontend changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/frontend-ci.yml'
+
   frontend:
+    # Ruleset の必須チェック名と一致させること
     name: Frontend (lint & build via Docker)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
