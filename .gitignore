@@ -16,3 +16,7 @@ frontend/dist/
 
 # Local environment variables
 .env
+
+# Coverage
+.coverage
+htmlcov/

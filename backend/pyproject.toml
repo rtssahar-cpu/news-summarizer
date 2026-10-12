@@ -15,6 +15,7 @@ dev = [
     "httpx==0.28.1",
     "mypy==2.4.0",
     "pytest==9.1.1",
+    "pytest-cov==7.1.0",
     "ruff==0.16.9",
 ]
 
@@ -32,3 +33,12 @@ python_files = ["test_*.py", "*_tests.py"]
 python_version = "3.12"
 strict = true
 files = ["app", "tests"]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false
