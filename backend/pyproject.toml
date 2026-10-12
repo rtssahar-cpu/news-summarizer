@@ -27,13 +27,23 @@ line-length = 100
 exclude = [".venv"]
 
 [tool.ruff.lint]
-# デフォルトのルール（E4, E7, E9, F）に追加する
-extend-select = [
-    "C901",    # 関数の循環的複雑度
-    "PLR0912", # 分岐が多すぎる
-    "PLR0913", # 引数が多すぎる
-    "PLR0915", # 文が多すぎる
+select = [
+    "E", "F",  # pycodestyle / Pyflakes
+    "I",       # import の並び順
+    "C90",     # 循環的複雑度 (mccabe)
+    "PLR",     # 引数・分岐・文の数・マジックナンバー (Pylint)
+    "S",       # セキュリティ (flake8-bandit)
+    "SIM",     # 冗長な書き方の簡略化 (flake8-simplify)
+    "FBT",     # bool の位置引数 (flake8-boolean-trap)
+    "B",       # Python 特有の潜在的バグ (flake8-bugbear)
+    "UP",      # モダンな文法 (pyupgrade)
+    "T20",     # print の消し忘れ (flake8-print)
+    "PT",      # pytest のスタイル (flake8-pytest-style)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004"]                   # pytest の assert と期待値
+"app/interface_adapters/controllers/**" = ["FBT"]  # FastAPI のクエリパラメータ
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
@@ -42,6 +52,7 @@ max-complexity = 10
 max-branches = 12
 max-args = 5
 max-statements = 50
+max-returns = 6
 
 [tool.pytest.ini_options]
 python_files = ["test_*.py", "*_tests.py"]
