@@ -1,0 +1,68 @@
+# 依存パッケージの更新 PR を自動作成する（脆弱性の修正 PR はリポジトリ設定の Dependabot security updates が担当）
+# minor / patch はエコシステムごとに 1 つの PR にまとめ、PR の数を抑える
+version: 2
+
+updates:
+  # バックエンド（pyproject.toml / uv.lock）
+  # ruff を更新したら .pre-commit-config.yaml の rev も合わせること
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      backend-minor-and-patch:
+        update-types: [minor, patch]
+
+  # フロントエンド（package.json / package-lock.json）
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      frontend-minor-and-patch:
+        update-types: [minor, patch]
+
+  # Docker のベースイメージ
+  - package-ecosystem: docker
+    directories: [/backend, /frontend]
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    commit-message:
+      prefix: chore
+      include: scope
+    ignore:
+      # Python / Node のバージョン上げは pyproject.toml・mypy 設定などと合わせて手動で行う
+      - dependency-name: python
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+
+  # GitHub Actions のアクション
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      github-actions:
+        patterns: ["*"]
