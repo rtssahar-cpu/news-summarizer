@@ -42,6 +42,8 @@ jobs:
           target: production
           push: true
           tags: ${{ env.IMAGE }}:${{ env.HEAD_SHA }}
+          build-args: |
+            APP_VERSION=${{ env.HEAD_SHA }}
           labels: |
             org.opencontainers.image.revision=${{ env.HEAD_SHA }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -79,3 +81,28 @@ jobs:
             --name "$ACA_APP" \
             --resource-group "$RESOURCE_GROUP" \
             --image "$IMAGE:$HEAD_SHA"
+
+      # 本番の /health が今回デプロイしたコミットの version を返すまで待つ（失敗時はジョブを失敗させる）
+      - name: Smoke test deployed app
+        if: steps.latest.outputs.is-latest == 'true'
+        run: |
+          fqdn=$(az containerapp show \
+            --name "$ACA_APP" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          health_url="https://$fqdn/health"
+
+          # min-replicas 0 のコールドスタートとリビジョン切り替えを考慮し、10 秒間隔で最大 3 分待つ
+          for attempt in $(seq 1 18); do
+            body=$(curl -fsS --max-time 30 "$health_url" || true)
+            status=$(echo "$body" | jq -r '.status // empty' 2>/dev/null || true)
+            version=$(echo "$body" | jq -r '.version // empty' 2>/dev/null || true)
+            if [ "$status" = "ok" ] && [ "$version" = "$HEAD_SHA" ]; then
+              echo "Smoke test passed: $health_url returned version $version"
+              exit 0
+            fi
+            echo "Attempt $attempt: status='$status' version='$version' (expected $HEAD_SHA)"
+            sleep 10
+          done
+          echo "::error::$health_url did not return version $HEAD_SHA within 3 minutes"
+          exit 1
