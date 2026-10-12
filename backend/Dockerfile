@@ -15,7 +15,7 @@ COPY . .
 RUN ruff check .
 RUN ruff format --check .
 RUN mypy
-RUN pytest
+RUN pytest --cov
 
 FROM base AS production
 COPY . .
