@@ -19,4 +19,7 @@ RUN pytest
 
 FROM base AS production
 COPY . .
+# デプロイ時にコミット SHA を渡し、/health の version で稼働中のバージョンを確認できるようにする
+ARG APP_VERSION=unknown
+ENV APP_VERSION=$APP_VERSION
 CMD ["uvicorn", "app.frameworks.asgi:app", "--host", "0.0.0.0", "--port", "8000"]
