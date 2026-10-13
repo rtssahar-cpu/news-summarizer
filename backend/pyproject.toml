@@ -13,6 +13,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx2==2.13.1",
+    "import-linter==2.15",
     "mypy==2.4.0",
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
@@ -70,3 +71,24 @@ branch = true
 fail_under = 80
 show_missing = true
 skip_covered = false
+
+# クリーンアーキテクチャの依存方向を CI で強制する（lint-imports で実行）
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "レイヤーの依存は外側から内側への一方向のみ"
+type = "layers"
+layers = [
+    "app.frameworks",
+    "app.interface_adapters",
+    "app.use_cases",
+    "app.entities",
+]
+
+[[tool.importlinter.contracts]]
+name = "entities / use_cases はフレームワーク・DB ライブラリに依存しない"
+type = "forbidden"
+source_modules = ["app.entities", "app.use_cases"]
+forbidden_modules = ["fastapi", "starlette", "sqlalchemy", "alembic", "psycopg", "uvicorn"]

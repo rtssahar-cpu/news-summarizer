@@ -15,6 +15,7 @@ COPY . .
 RUN ruff check .
 RUN ruff format --check .
 RUN mypy
+RUN lint-imports
 RUN pytest --cov
 
 FROM base AS production
