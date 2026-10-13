@@ -1,12 +1,19 @@
-# セットアップ: uvx pre-commit install
-# Ruff のバージョンは backend/pyproject.toml の ruff と揃えること（CI との差異を防ぐ）
+# セットアップ: (cd backend && uv sync) && uvx pre-commit install
+# Ruff は backend/uv.lock で固定されたバージョンを uv 経由で実行する（CI と同じバージョンになり、二重管理を避ける）
+# --project はカレントディレクトリを変えないため、pre-commit が渡すリポジトリルート基準のパスがそのまま使える
 # mypy はプロジェクト全体の型情報が必要なため、ここでは実行せず CI で実行する
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.9
+  - repo: local
     hooks:
       - id: ruff-check
-        args: [--fix]
+        name: ruff check
+        entry: uv run --project backend --locked ruff check --fix
+        language: system
+        types: [python]
         files: ^backend/
       - id: ruff-format
+        name: ruff format
+        entry: uv run --project backend --locked ruff format
+        language: system
+        types: [python]
         files: ^backend/
