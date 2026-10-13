@@ -4,7 +4,7 @@ version: 2
 
 updates:
   # バックエンド（pyproject.toml / uv.lock）
-  # ruff を更新したら .pre-commit-config.yaml の rev も合わせること
+  # ruff の更新は pre-commit にも自動で反映される（pre-commit は uv.lock の ruff を使う）
   - package-ecosystem: uv
     directory: /backend
     schedule:
