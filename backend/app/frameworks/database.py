@@ -1,7 +1,7 @@
 import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 
 def build_database_url() -> str:
@@ -15,10 +15,6 @@ def build_database_url() -> str:
     port = os.environ.get("POSTGRES_PORT", "5432")
     name = os.environ.get("POSTGRES_DB", "newssummarizer")
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{name}"
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 engine = create_engine(build_database_url())

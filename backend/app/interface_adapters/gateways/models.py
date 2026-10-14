@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import ARRAY, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.frameworks.database import Base
+from app.interface_adapters.gateways.base import Base
 
 
 class ArticleModel(Base):
