@@ -14,7 +14,7 @@ class ModNotice:
     pdf_url: str | None
 
 
-def parse_notice_list(html: str, reference_date: datetime) -> list[ModNotice]:
+def parse_mod_notice_list(html: str, reference_date: datetime) -> list[ModNotice]:
     soup = BeautifulSoup(html, "html.parser")
     notices: list[ModNotice] = []
 
