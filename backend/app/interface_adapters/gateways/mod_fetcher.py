@@ -6,7 +6,9 @@ import httpx
 from app.entities.article import Article
 from app.interface_adapters.gateways.mod_notice_parser import parse_mod_notice_list
 from app.interface_adapters.gateways.pdf_text import extract_pdf_text
+from app.use_cases.errors import ArticleContentUnavailableError, ArticleSourceUnavailableError
 
+SOURCE_NAME = "mod"
 NOTICE_LIST_URL = "https://www.mod.go.jp/j/press/news/index.html"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -21,10 +23,8 @@ class ModPressReleaseFetcher:
         self._client = client
 
     def fetch_recent_articles(self, limit: int = 5) -> list[Article]:
-        response = self._client.get(NOTICE_LIST_URL, headers={"User-Agent": USER_AGENT})
-        response.raise_for_status()
-
-        notices = parse_mod_notice_list(response.text, reference_date=datetime.now(UTC))
+        notice_list_html = self._fetch_notice_list_html()
+        notices = parse_mod_notice_list(notice_list_html, reference_date=datetime.now(UTC))
         articles: list[Article] = []
 
         for notice in notices[:limit]:
@@ -34,14 +34,16 @@ class ModPressReleaseFetcher:
 
             try:
                 body = self._fetch_pdf_text(notice.pdf_url)
-            except httpx.HTTPError:
-                logger.warning("PDF取得に失敗したため記事をスキップ: %s", notice.pdf_url)
+            except (httpx.HTTPError, ArticleContentUnavailableError) as error:
+                logger.warning(
+                    "PDFの取得・抽出に失敗したため記事をスキップ: %s (%s)", notice.pdf_url, error
+                )
                 continue
 
             articles.append(
                 Article(
                     id=None,
-                    source="mod",
+                    source=SOURCE_NAME,
                     url=notice.article_url,
                     title=notice.title,
                     body=body,
@@ -50,6 +52,16 @@ class ModPressReleaseFetcher:
             )
 
         return articles
+
+    def _fetch_notice_list_html(self) -> str:
+        try:
+            response = self._client.get(NOTICE_LIST_URL, headers={"User-Agent": USER_AGENT})
+            response.raise_for_status()
+        except httpx.HTTPError as error:
+            raise ArticleSourceUnavailableError(
+                source=SOURCE_NAME, reason=f"お知らせ一覧ページの取得に失敗: {error}"
+            ) from error
+        return response.text
 
     def _fetch_pdf_text(self, pdf_url: str) -> str:
         response = self._client.get(pdf_url, headers={"User-Agent": USER_AGENT})

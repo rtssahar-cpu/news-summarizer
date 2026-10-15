@@ -1,9 +1,14 @@
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
 from bs4 import BeautifulSoup, Tag
 
+from app.use_cases.errors import SourceStructureChangedError
+
 MOD_BASE_URL = "https://www.mod.go.jp"
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -28,16 +33,27 @@ def parse_mod_notice_list(html: str, reference_date: datetime) -> list[ModNotice
         if not isinstance(article_href, str):
             continue
 
+        date_text = date_tag.get_text(strip=True)
+        try:
+            published_at = _parse_date(date_text, reference_date)
+        except ValueError:
+            logger.warning("日付の形式が不正なためお知らせをスキップ: %r", date_text)
+            continue
+
         pdf_url = _extract_pdf_url(item)
         notices.append(
             ModNotice(
-                published_at=_parse_date(date_tag.get_text(strip=True), reference_date),
+                published_at=published_at,
                 title=title_tag.get_text(strip=True),
                 article_url=MOD_BASE_URL + article_href,
                 pdf_url=pdf_url,
             )
         )
 
+    if not notices:
+        raise SourceStructureChangedError(
+            source="mod", reason="お知らせ一覧ページからお知らせを1件も抽出できません"
+        )
     return notices
 
 
