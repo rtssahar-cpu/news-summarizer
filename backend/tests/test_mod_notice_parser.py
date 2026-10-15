@@ -1,6 +1,10 @@
+import logging
 from datetime import UTC, datetime
 
+import pytest
+
 from app.interface_adapters.gateways.mod_notice_parser import parse_mod_notice_list
+from app.use_cases.errors import SourceStructureChangedError
 
 SAMPLE_HTML = """
 <div class="news__item">
@@ -58,6 +62,28 @@ def test_parse_mod_notice_list_skips_item_missing_date_or_title() -> None:
     </div>
     """
 
-    notices = parse_mod_notice_list(html, reference_date=datetime(2026, 9, 20, tzinfo=UTC))
+    notices = parse_mod_notice_list(
+        html + SAMPLE_HTML, reference_date=datetime(2026, 9, 20, tzinfo=UTC)
+    )
 
-    assert notices == []
+    assert [notice.title for notice in notices] == ["日米電話会談について", "PDFなしのお知らせ"]
+
+
+@pytest.mark.parametrize("malformed_date", ["9-19", "2/30", "不明"])
+def test_parse_mod_notice_list_skips_item_with_malformed_date(
+    malformed_date: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    html = SAMPLE_HTML.replace("9/19", malformed_date)
+
+    with caplog.at_level(logging.WARNING):
+        notices = parse_mod_notice_list(html, reference_date=datetime(2026, 9, 20, tzinfo=UTC))
+
+    assert [notice.title for notice in notices] == ["PDFなしのお知らせ"]
+    assert "日付の形式が不正" in caplog.text
+
+
+def test_parse_mod_notice_list_raises_when_no_notice_is_extracted() -> None:
+    html = "<html><body><p>構造が変わったページ</p></body></html>"
+
+    with pytest.raises(SourceStructureChangedError):
+        parse_mod_notice_list(html, reference_date=datetime(2026, 9, 20, tzinfo=UTC))
