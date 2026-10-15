@@ -27,26 +27,12 @@
 ## 4. プロジェクト固有の情報
 
 ### 構成
-- `backend/`: FastAPI + SQLAlchemy + Alembic（Python 3.12、uv で依存管理）
+- `backend/`: 詳細は `docs/BACKEND_PLAN.md` を参照
 - `frontend/`: React + Vite + TypeScript（npm、Biome で lint）
 - ローカル開発は `docker compose up`（db / backend / frontend）
 
-### バックエンドのレイヤー（import-linter で CI が強制）
-- `app/frameworks` → `app/interface_adapters` → `app/use_cases` → `app/entities` の一方向のみ import 可
-- `entities` / `use_cases` から fastapi / starlette / sqlalchemy / alembic / psycopg / uvicorn の import は禁止
-- 環境変数などの外部入力は `frameworks` 層で読み、引数で内側に注入する（例: `create_app(app_version)`）
-
-### 完了の条件（コードを変更したら必ず実行し、すべて通すこと）
-```bash
-cd backend
-uv run ruff check . && uv run ruff format --check .
-uv run mypy            # strict
-uv run lint-imports    # レイヤー違反の検出
-uv run pytest --cov    # カバレッジ 80% 未満は失敗
-```
-- CI と同じ条件で確認する場合: `docker build --target test backend`
-- フロントエンド: `cd frontend && npm run lint && npm run build`（build に `tsc -b` の型チェックを含む）
-- Ruff のルール（複雑度・セキュリティ等）は `backend/pyproject.toml` を参照。`# noqa` での回避は最終手段とし、理由をコメントに書く
+### フロントエンドの完了の条件
+- `cd frontend && npm run lint && npm run build`（build に `tsc -b` の型チェックを含む）
 
 ### Git の運用
 - main へ直接 push しない。作業ごとに **最新の main から** ブランチを切る（PR は Rebase and merge のため、マージ済みブランチで作業を続けるとコンフリクトする）
@@ -54,14 +40,7 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
 - コミットメッセージ: `feat:` `fix:` `chore:` `docs:` などのプレフィックス + 日本語
 - コミット・push・PR 作成はユーザーの指示があったときのみ行う
 
-### CI/CD（`.github/workflows/`）
-- `backend-ci.yml` / `frontend-ci.yml`: 毎回起動し、変更がなければジョブをスキップする
-- **ジョブの `name` は Ruleset の必須チェック名と一致させているため変更しない**
-- main への push で backend が変わっていれば、テスト・スモークテスト成功後に `deploy-backend.yml` が呼ばれ Azure Container Apps へデプロイされる
-- デプロイ後に本番の `/health` の `version` がコミット SHA と一致するか確認する
-
 ### 注意点
 - 依存の追加・変更は `uv add` / `npm install` で行い、lock ファイルも必ずコミットする。新しいパッケージを追加する前にユーザーに確認する
-- Ruff のバージョンは `backend/uv.lock` で一元管理（pre-commit も uv 経由で同じ Ruff を使う）
 - Python / Node のメジャー・マイナー更新は `pyproject.toml`・mypy 設定・Dockerfile を合わせて手動で行う
-- インフラ（Container App の作成・シークレット・レプリカ数）は CI の管理外。ワークフローではイメージ更新のみ行う
+- **バックエンドのアーキテクチャ・レイヤールール・完了条件・CI/CD・実装ロードマップは `docs/BACKEND_PLAN.md` を参照すること（バックエンドのコードに触れる前に必読）**
