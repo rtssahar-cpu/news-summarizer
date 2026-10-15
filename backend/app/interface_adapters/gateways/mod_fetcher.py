@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 import httpx
 
 from app.entities.article import Article
-from app.interface_adapters.gateways.mod_notice_parser import parse_notice_list
+from app.interface_adapters.gateways.mod_notice_parser import parse_mod_notice_list
 from app.interface_adapters.gateways.pdf_text import extract_pdf_text
 
 NOTICE_LIST_URL = "https://www.mod.go.jp/j/press/news/index.html"
@@ -24,7 +24,7 @@ class ModPressReleaseFetcher:
         response = self._client.get(NOTICE_LIST_URL, headers={"User-Agent": USER_AGENT})
         response.raise_for_status()
 
-        notices = parse_notice_list(response.text, reference_date=datetime.now(UTC))
+        notices = parse_mod_notice_list(response.text, reference_date=datetime.now(UTC))
         articles: list[Article] = []
 
         for notice in notices[:limit]:
