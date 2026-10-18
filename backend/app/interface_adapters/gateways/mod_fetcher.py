@@ -1,16 +1,16 @@
 import logging
-from datetime import UTC, datetime
 
 import httpx
 
 from app.entities.article import Article
 from app.interface_adapters.gateways.http_headers import USER_AGENT
-from app.interface_adapters.gateways.mod_notice_parser import parse_mod_notice_list
+from app.interface_adapters.gateways.mod_rss_parser import SOURCE_NAME, parse_mod_news_rss
 from app.interface_adapters.gateways.pdf_text import extract_pdf_text
 from app.use_cases.errors import ArticleContentUnavailableError, ArticleSourceUnavailableError
 
-SOURCE_NAME = "mod"
-NOTICE_LIST_URL = "https://www.mod.go.jp/j/press/news/index.html"
+NEWS_RSS_URL = "https://www.mod.go.jp/j/rss/news.xml"
+# PDF版がないお知らせも多いため、limit件そろうまで先の記事も試す（負荷を抑えるため上限あり）
+MAX_ATTEMPTS_PER_ARTICLE = 3
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +20,12 @@ class ModPressReleaseFetcher:
         self._client = client
 
     def fetch_recent_articles(self, limit: int = 5) -> list[Article]:
-        notice_list_html = self._fetch_notice_list_html()
-        notices = parse_mod_notice_list(notice_list_html, reference_date=datetime.now(UTC))
+        notices = parse_mod_news_rss(self._fetch_news_rss())
         articles: list[Article] = []
 
-        for notice in notices[:limit]:
-            if notice.pdf_url is None:
-                logger.warning("PDFリンクが見つからないため記事をスキップ: %s", notice.article_url)
-                continue
+        for notice in notices[: limit * MAX_ATTEMPTS_PER_ARTICLE]:
+            if len(articles) >= limit:
+                break
 
             try:
                 body = self._fetch_pdf_text(notice.pdf_url)
@@ -50,13 +48,13 @@ class ModPressReleaseFetcher:
 
         return articles
 
-    def _fetch_notice_list_html(self) -> str:
+    def _fetch_news_rss(self) -> str:
         try:
-            response = self._client.get(NOTICE_LIST_URL, headers={"User-Agent": USER_AGENT})
+            response = self._client.get(NEWS_RSS_URL, headers={"User-Agent": USER_AGENT})
             response.raise_for_status()
         except httpx.HTTPError as error:
             raise ArticleSourceUnavailableError(
-                source=SOURCE_NAME, reason=f"お知らせ一覧ページの取得に失敗: {error}"
+                source=SOURCE_NAME, reason=f"ニュースRSSの取得に失敗: {error}"
             ) from error
         return response.text
 
