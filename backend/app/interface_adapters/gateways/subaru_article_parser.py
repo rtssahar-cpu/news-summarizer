@@ -1,6 +1,6 @@
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 
-from app.interface_adapters.gateways.html_text import find_line_blocks, to_lines
+from app.interface_adapters.gateways.html_text import find_line_blocks, is_inside_any, to_lines
 from app.use_cases.errors import ArticleContentUnavailableError
 
 # 本文を囲む要素はなく、日付・タイトル・本文・PDFボタンが div#text の直下に並んでいる
@@ -22,15 +22,9 @@ def extract_subaru_article_body(html: str) -> str:
     body_lines = [
         line
         for block in find_line_blocks(text_area, LINE_BLOCK_TAGS)
-        if not _is_inside_any(block, non_body_elements)
+        if not is_inside_any(block, non_body_elements)
         for line in to_lines(block)
     ]
     if not body_lines:
         raise ArticleContentUnavailableError("記事ページの本文が空です")
     return "\n".join(body_lines)
-
-
-def _is_inside_any(block: Tag, elements: list[Tag]) -> bool:
-    # BeautifulSoupのTagは == が内容の比較になるため、同一の要素かどうかは is で判定する
-    ancestors_and_self = [block, *block.parents]
-    return any(node is element for node in ancestors_and_self for element in elements)
