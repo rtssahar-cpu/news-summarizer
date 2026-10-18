@@ -29,3 +29,10 @@ def to_lines(block: Tag) -> list[str]:
         or (isinstance(node, NavigableString) and not isinstance(node, Comment))
     )
     return [line.strip() for line in text.split("\n") if line.strip()]
+
+
+def is_inside_any(block: Tag, elements: Sequence[Tag]) -> bool:
+    """ブロックが、いずれかの要素そのもの、またはその内側にあるかを返す。"""
+    # BeautifulSoupのTagは == が内容の比較になるため、同一の要素かどうかは is で判定する
+    ancestors_and_self = [block, *block.parents]
+    return any(node is element for node in ancestors_and_self for element in elements)
