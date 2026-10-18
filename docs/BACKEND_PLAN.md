@@ -63,6 +63,9 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
 1. ✅ DBスキーマ設計（`Article`/`Summary`エンティティ、ORMモデル。`feat/phase1-db-schema`でマージ済み）
 2. ✅ 防衛省の取得アダプタ（`app/interface_adapters/gateways/mod_fetcher.py`。`feat/phase1-mod-fetcher`、RSS経由への切り替えは`fix/mod-fetcher-use-rss`）
 3. 🔄 8社（三菱重工・川崎重工・スバル・IHI・三菱電機・NEC・富士通・日立）のプレスリリース取得アダプタ（共通ポート `app/use_cases/article_fetcher.py` の `ArticleFetcher` に準拠させる。富士通は後回し）
+   - ✅ 三菱重工（`mhi_fetcher.py`。`feat/phase1-mhi-fetcher`）
+   - ✅ 川崎重工（`khi_fetcher.py`。`feat/phase1-khi-fetcher`）
+   - ⬜ スバル・IHI・三菱電機・NEC・日立・富士通
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
@@ -90,18 +93,31 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 
 ### データソースに関する注意点（防衛産業8社）
 
-2026-10-18時点で、各社のプレスリリース一覧ページへのアクセスを確認した結果（個別記事ページは未確認）。
+2026-10-18時点で、各社のプレスリリース一覧ページへのアクセスを確認した結果（実装済みの会社以外は、個別記事ページは未確認）。
 
 | 会社 | 一覧ページ | 状況・取得方法の候補 |
 |---|---|---|
-| 三菱重工 | `mhi.com/jp/news/` | 取得可（Cloudflare経由だが通る）。RSS `/jp/rss/mhi_news.xml` あり |
-| 川崎重工 | `khi.co.jp/pressrelease/` | 取得可。RSS案内ページ `/news_atom/` あり |
+| 三菱重工 | `mhi.com/jp/news/` | ✅実装済み。RSS `/jp/rss/mhi_news.xml` →記事ページのHTML解析（Cloudflare経由だが通る） |
+| 川崎重工 | `khi.co.jp/pressrelease/` | ✅実装済み。RSS `/pressrelease/rss/pressrelease.xml` →記事ページのHTML解析 or PDF（下記参照） |
 | スバル | `subaru.co.jp/news/` | 取得可（`/press/` は404）。記事URLに日付を含む |
 | IHI | `ihi.co.jp/all_news/` | 取得可。HTML解析 |
 | 三菱電機 | `mitsubishielectric.co.jp/ja/pr/` | 取得可だが一覧はJSで描画。裏で読み込むデータの調査が必要 |
 | NEC | `jpn.nec.com/press/` | 取得可だが一覧はJSで描画（CSVを読み込んでいる）。CSVの直接取得を検討 |
 | 富士通 | `global.fujitsu/ja-jp/pr` | **429（Vercel Security Checkpointでブロック）**。別経路を調査する（後回し） |
 | 日立 | `hitachi.com/ja-jp/press/` | 取得可。HTML解析 |
+
+#### 川崎重工
+
+- **RSSのリンク先が3種類ある:** 記事ページ（`/pressrelease/detail/YYYYMMDD_N.html`）、PDFのみの発表
+  （`/pressrelease/news_YYMMDD-N.pdf`。人事異動・他社との共同発表等）、IR資料（`/ir/library/` 等）が混在する。
+  URLが `.pdf` なら `extract_pdf_text`、それ以外は記事ページとして本文を抽出する。IR資料はページ構造が異なり、
+  装備品に関する情報もほぼないため対象外としている（`/pressrelease/` 配下以外はスキップ）
+- **記事ページの本文は `div.news-detail-area`:** 副題（`div.heading_subtitle`）はRSSのタイトルに含まれないため本文の先頭に
+  加える。本文は `<span>2026</span>年` のように1文の中が細かくタグで区切られているため、`<p>`/`<td>`/`<li>` を1行の単位とし、
+  `<br>` の位置だけで改行する（`get_text("\n")` だと文の途中で改行される）
+- **発表日は `pubDate` を使う:** 防衛省と異なり、実際の発表日時になっている。`Wed,14 Oct` のようにカンマの後に空白が
+  ない形式も混ざるが、`parsedate_to_datetime` で解析できる
+- **画像だけのPDFはスキップする:** テキストを抽出できず空になるため、`ArticleContentUnavailableError` として扱う
 
 ### カテゴリ分類（`app/entities/category.py`）
 
