@@ -67,7 +67,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 川崎重工（`khi_fetcher.py`。`feat/phase1-khi-fetcher`）
    - ✅ スバル（`subaru_fetcher.py`。`feat/phase1-subaru-fetcher`）
    - ✅ IHI（`ihi_fetcher.py`。`feat/phase1-ihi-fetcher`）
-   - ⬜ 三菱電機・NEC・日立・富士通
+   - ✅ 日立（`hitachi_fetcher.py`。`feat/phase1-hitachi-fetcher`）
+   - ⬜ 三菱電機・NEC・富士通
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
@@ -106,7 +107,7 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 | 三菱電機 | `mitsubishielectric.co.jp/ja/pr/` | 取得可だが一覧はJSで描画。裏で読み込むデータの調査が必要 |
 | NEC | `jpn.nec.com/press/` | 取得可だが一覧はJSで描画（CSVを読み込んでいる）。CSVの直接取得を検討 |
 | 富士通 | `global.fujitsu/ja-jp/pr` | **429（Vercel Security Checkpointでブロック）**。別経路を調査する（後回し） |
-| 日立 | `hitachi.com/ja-jp/press/` | 取得可。HTML解析 |
+| 日立 | `hitachi.com/ja-jp/press/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むJSON→記事PDF（下記参照） |
 
 #### 川崎重工
 
@@ -147,6 +148,24 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 - **記事ページの本文は `div.m-entry-detail`:** ヘッダー（日付・種別・タイトル）、English pageへのリンク（`p.m-en-link`）、
   「ニューストップへ」（`p.m-entry-detail_back`）を除いて抽出する。副題（`h1 > div.size-xsmall`）は一覧のタイトルに含まれない
   ため本文の先頭に加える。小見出し（`<h4>`）・特長の一覧（`<dt>`/`<dd>`）も1行の単位とする
+
+#### 日立
+
+- **一覧は裏で読み込むJSONを直接取得する:** `/ja-jp/press/` の一覧はJSで描画されるため、
+  `/content/hitachi/global/ja_jp/press/jcr:content/root/main-container/initial-container/page_search_copy_cop.json`
+  を取得する（新しい順に12件。`?page=2` で次の12件も取れるが、`limit` に足りるため使っていない）。
+  対象は `newsPath` が `/ja-jp/press/articles/YYYY/MM/MMDD[a-z]/` 形式の項目のみ（2026-10-18時点で直近180件はすべてこの形式）。
+  スバル・IHIと同様、カテゴリ（`displayTags`）では絞らずカテゴリ判定（ステップ4）に任せる
+- **発表日は `publishDateValue`（`2026-10-16T17:00:00`）を使う:** タイムゾーンはないため日本時間とする。時刻まで取れる
+- **本文はPDFから取得する:** 記事ページの大半（12件中10件）は日付・タイトル・「PDFをダウンロード」ボタンのみで、本文がHTMLにない。
+  全記事にPDFがあるため、HTMLの本文の有無にかかわらず常にPDFを使う
+- **PDFのURLは記事URLから導いている:** `/ja-jp/press/articles/2026/10/1016a/` →
+  `/content/dam/hitachi/global/ja_jp/press/files/2026/10/1016a.pdf`（過去分21件で、記事ページ内のリンクと一致することを確認）。
+  記事ページは取得しない
+- **PDFはAESで暗号化されている:** 閲覧用パスワードはないが権限制限付きで、pypdfでの復号に `cryptography` が必要（依存に追加済み）。
+  なお、ライブラリ不足時にpypdfが送出する `DependencyError` は `PyPdfError` を継承していないため、`pdf_text.py` で個別に捕捉している
+- **`Article.url` は記事ページのURLにする:** 人が読むページを保存し、PDFのURLは本文の取得にのみ使う。
+  抽出した本文にはページ番号（`1/2`）や `Press Release` も含まれるが、要約への影響は小さいため除去していない
 
 ### カテゴリ分類（`app/entities/category.py`）
 
