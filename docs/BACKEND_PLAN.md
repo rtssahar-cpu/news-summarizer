@@ -66,7 +66,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 三菱重工（`mhi_fetcher.py`。`feat/phase1-mhi-fetcher`）
    - ✅ 川崎重工（`khi_fetcher.py`。`feat/phase1-khi-fetcher`）
    - ✅ スバル（`subaru_fetcher.py`。`feat/phase1-subaru-fetcher`）
-   - ⬜ IHI・三菱電機・NEC・日立・富士通
+   - ✅ IHI（`ihi_fetcher.py`。`feat/phase1-ihi-fetcher`）
+   - ⬜ 三菱電機・NEC・日立・富士通
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
@@ -101,7 +102,7 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 | 三菱重工 | `mhi.com/jp/news/` | ✅実装済み。RSS `/jp/rss/mhi_news.xml` →記事ページのHTML解析（Cloudflare経由だが通る） |
 | 川崎重工 | `khi.co.jp/pressrelease/` | ✅実装済み。RSS `/pressrelease/rss/pressrelease.xml` →記事ページのHTML解析 or PDF（下記参照） |
 | スバル | `subaru.co.jp/news/` | ✅実装済み。RSSなし。一覧ページ→記事ページのHTML解析（下記参照） |
-| IHI | `ihi.co.jp/all_news/` | 取得可。HTML解析 |
+| IHI | `ihi.co.jp/all_news/` | ✅実装済み。RSSなし。一覧ページ→記事ページのHTML解析（下記参照） |
 | 三菱電機 | `mitsubishielectric.co.jp/ja/pr/` | 取得可だが一覧はJSで描画。裏で読み込むデータの調査が必要 |
 | NEC | `jpn.nec.com/press/` | 取得可だが一覧はJSで描画（CSVを読み込んでいる）。CSVの直接取得を検討 |
 | 富士通 | `global.fujitsu/ja-jp/pr` | **429（Vercel Security Checkpointでブロック）**。別経路を調査する（後回し） |
@@ -133,6 +134,19 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   （`div.newsFooter`）と同じ階層に並ぶため、それらを除いて抽出する。注釈（`*1：...`）は `<div>` で書かれるため `<div>` も
   1行の単位とする。行の抽出処理はKHIと共通（`html_text.py`）
 - **PDF版は取得しない:** 記事によっては `[PDF]` ボタンがあるが、HTMLの本文と同じ内容と考えられるため（PDFの中身は未確認）
+
+#### IHI
+
+- **RSSがないため一覧ページを解析する:** `/all_news/` はタブ構成で、種別ごとのタブ（`#tab02`〜）にも同じニュースが
+  重複して載るため、「すべて」のタブ（`div#tab01 ul.m-news > li`）だけを見る。一覧に載るのは**今年度（4月〜）のニュースのみ**
+- **対象は `/all_news/YYYY/<分野>/NNN_NNN.html` 形式のリンクのみ:** 種別は「プレスリリース」「お知らせ」「適時開示」が混在する。
+  適時開示（決算等のPDF）、IR・研究開発のページへのリンク、リンクのない項目は対象外。スバルと同様、分野（航空・宇宙・防衛等）
+  では絞らずカテゴリ判定（ステップ4）に任せる
+- **発表日は `<time>` の表示テキスト（`2026年10月07日`）を使う:** `datetime` 属性は重複側のタブで全件 `2022-10-19` に
+  なっているなど信用できないため。時刻はないため日本時間の0時とする
+- **記事ページの本文は `div.m-entry-detail`:** ヘッダー（日付・種別・タイトル）、English pageへのリンク（`p.m-en-link`）、
+  「ニューストップへ」（`p.m-entry-detail_back`）を除いて抽出する。副題（`h1 > div.size-xsmall`）は一覧のタイトルに含まれない
+  ため本文の先頭に加える。小見出し（`<h4>`）・特長の一覧（`<dt>`/`<dd>`）も1行の単位とする
 
 ### カテゴリ分類（`app/entities/category.py`）
 
