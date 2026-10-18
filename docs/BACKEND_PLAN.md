@@ -62,7 +62,7 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
 
 1. ✅ DBスキーマ設計（`Article`/`Summary`エンティティ、ORMモデル。`feat/phase1-db-schema`でマージ済み）
 2. ✅ 防衛省の取得アダプタ（`app/interface_adapters/gateways/mod_fetcher.py`。`feat/phase1-mod-fetcher`）
-3. ⬜ 8社（三菱重工・川崎重工・スバル・IHI・三菱電機・NEC・富士通・日立）のプレスリリース取得アダプタ
+3. 🔄 8社（三菱重工・川崎重工・スバル・IHI・三菱電機・NEC・富士通・日立）のプレスリリース取得アダプタ（共通ポート `app/use_cases/article_fetcher.py` の `ArticleFetcher` に準拠させる。富士通は後回し）
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
@@ -73,6 +73,21 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
 **「お知らせ一覧ページ」（`/j/press/news/index.html`）と、そこからリンクされる「PDF版（印刷用）」のみブロックされない**
 ことを確認済み。そのため、一覧ページのHTML解析→PDFテキスト抽出、という経路で実装している。8社のサイトを追加する際も、
 同様にCloudflare等のbot対策の有無を個別に確認すること。
+
+### データソースに関する注意点（防衛産業8社）
+
+2026-10-18時点で、各社のプレスリリース一覧ページへのアクセスを確認した結果（個別記事ページは未確認）。
+
+| 会社 | 一覧ページ | 状況・取得方法の候補 |
+|---|---|---|
+| 三菱重工 | `mhi.com/jp/news/` | 取得可（Cloudflare経由だが通る）。RSS `/jp/rss/mhi_news.xml` あり |
+| 川崎重工 | `khi.co.jp/pressrelease/` | 取得可。RSS案内ページ `/news_atom/` あり |
+| スバル | `subaru.co.jp/news/` | 取得可（`/press/` は404）。記事URLに日付を含む |
+| IHI | `ihi.co.jp/all_news/` | 取得可。HTML解析 |
+| 三菱電機 | `mitsubishielectric.co.jp/ja/pr/` | 取得可だが一覧はJSで描画。裏で読み込むデータの調査が必要 |
+| NEC | `jpn.nec.com/press/` | 取得可だが一覧はJSで描画（CSVを読み込んでいる）。CSVの直接取得を検討 |
+| 富士通 | `global.fujitsu/ja-jp/pr` | **429（Vercel Security Checkpointでブロック）**。別経路を調査する（後回し） |
+| 日立 | `hitachi.com/ja-jp/press/` | 取得可。HTML解析 |
 
 ### カテゴリ分類（`app/entities/category.py`）
 
