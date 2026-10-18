@@ -4,16 +4,13 @@ from datetime import UTC, datetime
 import httpx
 
 from app.entities.article import Article
+from app.interface_adapters.gateways.http_headers import USER_AGENT
 from app.interface_adapters.gateways.mod_notice_parser import parse_mod_notice_list
 from app.interface_adapters.gateways.pdf_text import extract_pdf_text
 from app.use_cases.errors import ArticleContentUnavailableError, ArticleSourceUnavailableError
 
 SOURCE_NAME = "mod"
 NOTICE_LIST_URL = "https://www.mod.go.jp/j/press/news/index.html"
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
-)
 
 logger = logging.getLogger(__name__)
 
