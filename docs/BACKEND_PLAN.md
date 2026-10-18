@@ -68,7 +68,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ スバル（`subaru_fetcher.py`。`feat/phase1-subaru-fetcher`）
    - ✅ IHI（`ihi_fetcher.py`。`feat/phase1-ihi-fetcher`）
    - ✅ 日立（`hitachi_fetcher.py`。`feat/phase1-hitachi-fetcher`）
-   - ⬜ 三菱電機・NEC・富士通
+   - ✅ 三菱電機（`melco_fetcher.py`。`feat/phase1-melco-fetcher`）
+   - ⬜ NEC・富士通
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
@@ -104,7 +105,7 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 | 川崎重工 | `khi.co.jp/pressrelease/` | ✅実装済み。RSS `/pressrelease/rss/pressrelease.xml` →記事ページのHTML解析 or PDF（下記参照） |
 | スバル | `subaru.co.jp/news/` | ✅実装済み。RSSなし。一覧ページ→記事ページのHTML解析（下記参照） |
 | IHI | `ihi.co.jp/all_news/` | ✅実装済み。RSSなし。一覧ページ→記事ページのHTML解析（下記参照） |
-| 三菱電機 | `mitsubishielectric.co.jp/ja/pr/` | 取得可だが一覧はJSで描画。裏で読み込むデータの調査が必要 |
+| 三菱電機 | `mitsubishielectric.co.jp/ja/pr/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むJSON→記事PDF（下記参照） |
 | NEC | `jpn.nec.com/press/` | 取得可だが一覧はJSで描画（CSVを読み込んでいる）。CSVの直接取得を検討 |
 | 富士通 | `global.fujitsu/ja-jp/pr` | **429（Vercel Security Checkpointでブロック）**。別経路を調査する（後回し） |
 | 日立 | `hitachi.com/ja-jp/press/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むJSON→記事PDF（下記参照） |
@@ -166,6 +167,25 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   なお、ライブラリ不足時にpypdfが送出する `DependencyError` は `PyPdfError` を継承していないため、`pdf_text.py` で個別に捕捉している
 - **`Article.url` は記事ページのURLにする:** 人が読むページを保存し、PDFのURLは本文の取得にのみ使う。
   抽出した本文にはページ番号（`1/2`）や `Press Release` も含まれるが、要約への影響は小さいため除去していない
+
+#### 三菱電機
+
+- **一覧は裏で読み込むJSONを直接取得する:** `/ja/pr/` の一覧はJSで描画されるため、
+  `/global/common/mel25/news-data/jws-news/japan/www/ja/news-article.json` を取得する（2023年1月以降の全件、約700件。新しい順）。
+  一覧ページの `data-js-newsjsonpath` 属性にある `/content/dam/prod/...` で始まるパスは404で、`data-js-prod-newsjsonpath` の方が正しい
+- **対象は三菱電機本体の発表のみ:** リンク先は記事ページ（`/ja/pr/YYYY/<ID>/`）、PDFのみの発表（`/ja/pr/YYYY/pdf/<ID>.pdf`）、
+  子会社等の他サイト（三菱電機ビルソリューションズ・三菱電機モビリティ等。`linkType` が `external`、または他ドメインのPDF）の3種類。
+  子会社の発表は防衛関連をほぼ含まないため対象外とした。他社と同様、カテゴリ（`categories`。`防衛・宇宙システム` 等）では絞らない
+- **発表日は `articlePublishtime`（`2026-10-16T19:30:00+09:00`）を使う:** タイムゾーン付きで時刻まで取れる
+- **本文はPDFから取得する:** 記事ページにも同じ内容の「リリース全文」PDFがあり、URLは記事URLから導ける
+  （`/ja/pr/2026/1013_co/` → `/ja/pr/2026/pdf/1013_co.pdf`）。PDFのみの発表はリンク先のPDFをそのまま使う
+- **「リリース全文」PDFがない記事は、分割されたPDFをすべて連結する:** 決算・IR Day・子会社化等の記事（直近約150件中8件）は
+  記事ページに本文がなく、分割されたPDF（`0820_ei1.pdf`〜、`0909-1.pdf`〜）へのリンクのみが並ぶ。導いたPDFが404の場合のみ
+  記事ページを取得し、同じ記事のPDFをすべて取得して連結する（`melco_article_parser.py`）。IR Dayの事業別資料等に防衛関連の
+  内容が含まれ得るため、先頭のPDFだけでなく全PDFを使う（本文は数十ページに及ぶことがある）。分割PDFのうち1つでも取得・抽出に
+  失敗した場合は記事ごとスキップする
+- **PDFの存在確認にHEADを使わない:** HEADリクエストでは404を返すが、GETでは取得できるPDFがある（`0304.pdf` 等）
+- **`Article.url` は記事ページのURLにする:** 日立と同様。PDFのみの発表はPDFのURLになる
 
 ### カテゴリ分類（`app/entities/category.py`）
 
