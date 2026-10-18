@@ -65,7 +65,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
 3. 🔄 8社（三菱重工・川崎重工・スバル・IHI・三菱電機・NEC・富士通・日立）のプレスリリース取得アダプタ（共通ポート `app/use_cases/article_fetcher.py` の `ArticleFetcher` に準拠させる。富士通は後回し）
    - ✅ 三菱重工（`mhi_fetcher.py`。`feat/phase1-mhi-fetcher`）
    - ✅ 川崎重工（`khi_fetcher.py`。`feat/phase1-khi-fetcher`）
-   - ⬜ スバル・IHI・三菱電機・NEC・日立・富士通
+   - ✅ スバル（`subaru_fetcher.py`。`feat/phase1-subaru-fetcher`）
+   - ⬜ IHI・三菱電機・NEC・日立・富士通
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
@@ -99,7 +100,7 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 |---|---|---|
 | 三菱重工 | `mhi.com/jp/news/` | ✅実装済み。RSS `/jp/rss/mhi_news.xml` →記事ページのHTML解析（Cloudflare経由だが通る） |
 | 川崎重工 | `khi.co.jp/pressrelease/` | ✅実装済み。RSS `/pressrelease/rss/pressrelease.xml` →記事ページのHTML解析 or PDF（下記参照） |
-| スバル | `subaru.co.jp/news/` | 取得可（`/press/` は404）。記事URLに日付を含む |
+| スバル | `subaru.co.jp/news/` | ✅実装済み。RSSなし。一覧ページ→記事ページのHTML解析（下記参照） |
 | IHI | `ihi.co.jp/all_news/` | 取得可。HTML解析 |
 | 三菱電機 | `mitsubishielectric.co.jp/ja/pr/` | 取得可だが一覧はJSで描画。裏で読み込むデータの調査が必要 |
 | NEC | `jpn.nec.com/press/` | 取得可だが一覧はJSで描画（CSVを読み込んでいる）。CSVの直接取得を検討 |
@@ -118,6 +119,20 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 - **発表日は `pubDate` を使う:** 防衛省と異なり、実際の発表日時になっている。`Wed,14 Oct` のようにカンマの後に空白が
   ない形式も混ざるが、`parsedate_to_datetime` で解析できる
 - **画像だけのPDFはスキップする:** テキストを抽出できず空になるため、`ArticleContentUnavailableError` として扱う
+
+#### スバル
+
+- **RSSがないため一覧ページを解析する:** `/news/` の `div.component-newsList li` が1件ずつのニュース（新しい順）。
+  一覧に載るのは**その年のニュースのみ**のため、年始は `limit` 件に満たないことがある（毎朝の新着取得には支障ないため、
+  前年の一覧はたどっていない）。決算発表の項目はリンク先がIR資料（`/ir/library/results.html`）のため対象外
+  （`/news/YYYY_MM_DD_N` 形式のリンクのみ対象）
+- **全ニュースを対象にする:** 大半は自動車関連で、防衛関連は「航空宇宙カンパニー」カテゴリ（年1〜2件程度）にほぼ限られるが、
+  他カテゴリに分類された防衛関連記事を取りこぼさないよう、カテゴリでは絞らずカテゴリ判定（ステップ4）に任せる
+- **発表日は一覧の `<time>2026/10/05</time>` を使う:** 時刻はないため日本時間の0時とする
+- **記事ページの本文は `div#text`:** 本文を囲む要素がなく、日付（`div.newsHeader`）・タイトル（`h1`）・PDFボタン
+  （`div.newsFooter`）と同じ階層に並ぶため、それらを除いて抽出する。注釈（`*1：...`）は `<div>` で書かれるため `<div>` も
+  1行の単位とする。行の抽出処理はKHIと共通（`html_text.py`）
+- **PDF版は取得しない:** 記事によっては `[PDF]` ボタンがあるが、HTMLの本文と同じ内容と考えられるため（PDFの中身は未確認）
 
 ### カテゴリ分類（`app/entities/category.py`）
 
