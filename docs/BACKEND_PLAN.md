@@ -62,7 +62,7 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
 
 1. ✅ DBスキーマ設計（`Article`/`Summary`エンティティ、ORMモデル。`feat/phase1-db-schema`でマージ済み）
 2. ✅ 防衛省の取得アダプタ（`app/interface_adapters/gateways/mod_fetcher.py`。`feat/phase1-mod-fetcher`、RSS経由への切り替えは`fix/mod-fetcher-use-rss`）
-3. 🔄 8社（三菱重工・川崎重工・スバル・IHI・三菱電機・NEC・富士通・日立）のプレスリリース取得アダプタ（共通ポート `app/use_cases/article_fetcher.py` の `ArticleFetcher` に準拠させる。富士通は後回し）
+3. ✅ 8社（三菱重工・川崎重工・スバル・IHI・三菱電機・NEC・富士通・日立）のプレスリリース取得アダプタ（共通ポート `app/use_cases/article_fetcher.py` の `ArticleFetcher` に準拠させる。富士通は取得手段がないため対象外）
    - ✅ 三菱重工（`mhi_fetcher.py`。`feat/phase1-mhi-fetcher`）
    - ✅ 川崎重工（`khi_fetcher.py`。`feat/phase1-khi-fetcher`）
    - ✅ スバル（`subaru_fetcher.py`。`feat/phase1-subaru-fetcher`）
@@ -70,7 +70,7 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 日立（`hitachi_fetcher.py`。`feat/phase1-hitachi-fetcher`）
    - ✅ 三菱電機（`melco_fetcher.py`。`feat/phase1-melco-fetcher`）
    - ✅ NEC（`nec_fetcher.py`。`feat/phase1-nec-fetcher`）
-   - ⬜ 富士通
+   - ➖ 富士通（対象外。サイト全体がbot対策でブロックされ、正規の取得経路がないため。下記参照）
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
@@ -108,7 +108,7 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 | IHI | `ihi.co.jp/all_news/` | ✅実装済み。RSSなし。一覧ページ→記事ページのHTML解析（下記参照） |
 | 三菱電機 | `mitsubishielectric.co.jp/ja/pr/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むJSON→記事PDF（下記参照） |
 | NEC | `jpn.nec.com/press/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むRSS `/ja/press/press.xml` →記事ページのHTML解析（下記参照） |
-| 富士通 | `global.fujitsu/ja-jp/pr` | **429（Vercel Security Checkpointでブロック）**。別経路を調査する（後回し） |
+| 富士通 | `global.fujitsu/ja-jp/pr` | **対象外。** サイト全体が429（Vercel Security Checkpoint）でブロックされ、正規の取得経路がない（下記参照） |
 | 日立 | `hitachi.com/ja-jp/press/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むJSON→記事PDF（下記参照） |
 
 #### 川崎重工
@@ -202,6 +202,20 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   「以上」の後の注記（`(注1)`〜）は「防衛装備庁が実施する…」のような補足を含むことがあるため、お問い合わせ先とともに残している
 - **添付PDFは取得しない:** 一部の記事にあるPDF（受賞者の略歴等）は補足資料のため。社債発行の告知のように本文がPDFにしかない
   記事もあるが（本文はタイトル程度になる）、財務関連で防衛関連の内容は含まないため対応していない
+
+#### 富士通（対象外）
+
+2026-10-19時点で、正規の経路で本文を自動取得する手段が見つからなかったため、取得アダプタは実装していない。
+
+- **`global.fujitsu` はドメイン全体がブロックされる:** 一覧・記事ページ・`robots.txt`・`favicon.ico` まで、すべて429
+  （Vercel Security Checkpoint。ブラウザでJSを実行させて人間かを確かめる仕組み）。本番環境（Azure）からも同様と考えられる。
+  ヘッドレスブラウザ等でチャレンジを突破することは、サイトのbot対策の回避にあたるため行わない
+- **旧URLは使えない:** `pr.fujitsu.com/jp/news/`（旧RSS含む）は `info.archives.global.fujitsu` へ転送されるが404
+- **Googleニュースの検索RSSは見出しのみ:** `news.google.com/rss/search?q=site:global.fujitsu/ja-jp/pr` は取得できるが、
+  本文がなくリンク先もブロックされる `global.fujitsu` のため、要約に使えない
+- **日経プレスリリースは使わない:** 一覧がJSで描画されるうえ、日経は自動収集・機械学習での利用を個別の問い合わせ扱いとしている
+- **富士通の防衛関連の動きは他ソースで補う:** 防衛省の発表、フェーズ2・3（日経・専門メディア）の記事で
+  `contractor_fujitsu` カテゴリに分類されることを想定する（カテゴリ自体は残す）。富士通がRSS等を提供した場合は再調査する
 
 ### カテゴリ分類（`app/entities/category.py`）
 
