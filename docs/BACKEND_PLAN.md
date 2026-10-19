@@ -69,7 +69,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ IHI（`ihi_fetcher.py`。`feat/phase1-ihi-fetcher`）
    - ✅ 日立（`hitachi_fetcher.py`。`feat/phase1-hitachi-fetcher`）
    - ✅ 三菱電機（`melco_fetcher.py`。`feat/phase1-melco-fetcher`）
-   - ⬜ NEC・富士通
+   - ✅ NEC（`nec_fetcher.py`。`feat/phase1-nec-fetcher`）
+   - ⬜ 富士通
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
@@ -106,7 +107,7 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 | スバル | `subaru.co.jp/news/` | ✅実装済み。RSSなし。一覧ページ→記事ページのHTML解析（下記参照） |
 | IHI | `ihi.co.jp/all_news/` | ✅実装済み。RSSなし。一覧ページ→記事ページのHTML解析（下記参照） |
 | 三菱電機 | `mitsubishielectric.co.jp/ja/pr/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むJSON→記事PDF（下記参照） |
-| NEC | `jpn.nec.com/press/` | 取得可だが一覧はJSで描画（CSVを読み込んでいる）。CSVの直接取得を検討 |
+| NEC | `jpn.nec.com/press/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むRSS `/ja/press/press.xml` →記事ページのHTML解析（下記参照） |
 | 富士通 | `global.fujitsu/ja-jp/pr` | **429（Vercel Security Checkpointでブロック）**。別経路を調査する（後回し） |
 | 日立 | `hitachi.com/ja-jp/press/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むJSON→記事PDF（下記参照） |
 
@@ -186,6 +187,21 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   失敗した場合は記事ごとスキップする
 - **PDFの存在確認にHEADを使わない:** HEADリクエストでは404を返すが、GETでは取得できるPDFがある（`0304.pdf` 等）
 - **`Article.url` は記事ページのURLにする:** 日立と同様。PDFのみの発表はPDFのURLになる
+
+#### NEC
+
+- **一覧は裏で読み込むRSSを直接取得する:** `/press/` の一覧はJSで描画されるため、`press_common.js` が読み込んでいる
+  RSS `/ja/press/press.xml`（新しい順に約100件）を取得する。一覧ページで読み込まれるCSV（`/corporateblog/csv/data.csv`）は
+  コーポレートブログ（NEC Stories）用で、プレスリリースではない
+- **対象はNEC本体の発表のみ:** RSSには子会社（NECネクサソリューションズ・NEC通信システム等。他ドメイン）の発表も含まれるが、
+  三菱電機と同様に対象外とした（`https://jpn.nec.com/press/YYYYMM/YYYYMMDD_NN.html` 形式のリンクのみ対象）。
+  他社と同様、カテゴリ（`<category>`）では絞らない
+- **発表日は `pubDate` を使う:** 防衛省と異なり、実際の発表日時（`10:00`・`15:30` 等）になっている
+- **記事ページの本文は `div.str-column-main`:** SNSの共有ボタン（`div.comp-sns`）と末尾の定型文（`div.mod-box`）を除いて
+  抽出する。副題（`div.str-pageTitle span.sub`）は本文の領域の外にあり、RSSのタイトルにも含まれないため本文の先頭に加える。
+  「以上」の後の注記（`(注1)`〜）は「防衛装備庁が実施する…」のような補足を含むことがあるため、お問い合わせ先とともに残している
+- **添付PDFは取得しない:** 一部の記事にあるPDF（受賞者の略歴等）は補足資料のため。社債発行の告知のように本文がPDFにしかない
+  記事もあるが（本文はタイトル程度になる）、財務関連で防衛関連の内容は含まないため対応していない
 
 ### カテゴリ分類（`app/entities/category.py`）
 
