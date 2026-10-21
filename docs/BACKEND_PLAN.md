@@ -75,7 +75,7 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 4-1. entities: 分析結果の値オブジェクト `ArticleAnalysis`（`article_analysis.py`）と、各カテゴリの判定基準（`category.py` の `CATEGORY_CRITERIA`。`feat/phase1-article-analysis`）
    - ✅ 4-2. use_cases: ポート `ArticleAnalyzer`（Protocol。`article_analyzer.py`）と、分析失敗を表す例外（`errors.py` の `ArticleAnalysisUnavailableError` / `ArticleAnalysisRequestError`。`feat/phase1-article-analyzer-port`）
    - ✅ 4-3. `anthropic` パッケージの追加（`uv add`。1.17.0。`feat/phase1-claude-article-analyzer`）
-   - ⬜ 4-4. gateway: プロンプトの組み立て（純粋関数）とテスト
+   - ✅ 4-4. gateway: プロンプトの組み立て（純粋関数 `build_system_prompt` / `build_user_message`。`article_analysis_prompt.py`。`feat/phase1-analysis-prompt`）
    - ⬜ 4-5. gateway: API呼び出し・レスポンスの変換・例外の変換とテスト（`claude_article_analyzer.py`）
    - ⬜ 4-6. 本ドキュメントの更新（実装状況・注意点）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
@@ -252,6 +252,12 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   認証エラー・400は `InternalError` 側（設定やコードの修正が必要）。`stop_reason` が `refusal`（防衛関連の内容のため拒否され得る）
   や `max_tokens` の場合もその記事をスキップしWARNとする。記事単位でスキップする原因はすべて `ArticleAnalysisUnavailableError`
   にまとめて `reason` で区別し、設定・コードの修正が必要なものは `ArticleAnalysisRequestError` とする
+- **プロンプトの組み立て（`article_analysis_prompt.py`）:** システムプロンプトは判定基準の定数を並べるだけで記事に依存せず、
+  毎回同じ内容になる（プロンプトキャッシュを後から導入できるようにするため）。見出しには構造化出力の項目名
+  （`matched_categories` 等）を使い、カテゴリはコード（`Category` の値）で答えさせる。記事はユーザーメッセージ側で
+  `<article>` 内のタグ（`<title>`・`<published_date>`・`<url>`・`<body>`）に分けて渡す
+  - **発表日は日本時間の日付にする:** 取得時は日本時間だが、DBから読み出すとUTCになり得るため、`astimezone(JST)` で揃える
+  - **取得元のコード（`mhi` 等）は渡さない:** モデルには意味が通じない略号のため。発表元はURLのドメインと本文から判断させる
 - **長すぎる本文は切り詰めない:** 三菱電機のIR資料のように数十ページに及ぶ本文があるため、上限を設けて超えた記事はスキップする
   （黙って切り詰めると要約の欠落に気付けないため）
 - **後回しにするもの:** プロンプトキャッシュ（システムプロンプトがキャッシュの最小サイズに届かない可能性があるため、実際の
