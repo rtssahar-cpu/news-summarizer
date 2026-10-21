@@ -74,7 +74,7 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく。方針は下記「カテゴリ判定＋要約の方針」参照）
    - ✅ 4-1. entities: 分析結果の値オブジェクト `ArticleAnalysis`（`article_analysis.py`）と、各カテゴリの判定基準（`category.py` の `CATEGORY_CRITERIA`。`feat/phase1-article-analysis`）
    - ✅ 4-2. use_cases: ポート `ArticleAnalyzer`（Protocol。`article_analyzer.py`）と、分析失敗を表す例外（`errors.py` の `ArticleAnalysisUnavailableError` / `ArticleAnalysisRequestError`。`feat/phase1-article-analyzer-port`）
-   - ⬜ 4-3. `anthropic` パッケージの追加（`uv add`。追加はユーザー承認済み）
+   - ✅ 4-3. `anthropic` パッケージの追加（`uv add`。1.17.0。`feat/phase1-claude-article-analyzer`）
    - ⬜ 4-4. gateway: プロンプトの組み立て（純粋関数）とテスト
    - ⬜ 4-5. gateway: API呼び出し・レスポンスの変換・例外の変換とテスト（`claude_article_analyzer.py`）
    - ⬜ 4-6. 本ドキュメントの更新（実装状況・注意点）
