@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "alembic==1.20.0",
+    "anthropic>=1.17.0",
     "beautifulsoup4==4.15.0",
     "cryptography==50.0.2",
     "defusedxml==0.7.1",
