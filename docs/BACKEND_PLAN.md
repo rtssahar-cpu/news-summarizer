@@ -73,7 +73,7 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ➖ 富士通（対象外。サイト全体がbot対策でブロックされ、正規の取得経路がないため。下記参照）
 4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく。方針は下記「カテゴリ判定＋要約の方針」参照）
    - ✅ 4-1. entities: 分析結果の値オブジェクト `ArticleAnalysis`（`article_analysis.py`）と、各カテゴリの判定基準（`category.py` の `CATEGORY_CRITERIA`。`feat/phase1-article-analysis`）
-   - ⬜ 4-2. use_cases: ポート `ArticleAnalyzer`（Protocol）と、分析失敗を表す例外（`errors.py`）
+   - ✅ 4-2. use_cases: ポート `ArticleAnalyzer`（Protocol。`article_analyzer.py`）と、分析失敗を表す例外（`errors.py` の `ArticleAnalysisUnavailableError` / `ArticleAnalysisRequestError`。`feat/phase1-article-analyzer-port`）
    - ⬜ 4-3. `anthropic` パッケージの追加（`uv add`。追加はユーザー承認済み）
    - ⬜ 4-4. gateway: プロンプトの組み立て（純粋関数）とテスト
    - ⬜ 4-5. gateway: API呼び出し・レスポンスの変換・例外の変換とテスト（`claude_article_analyzer.py`）
@@ -250,7 +250,8 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - 「非公開情報」はカテゴリではなく取得元の選び方の方針のため、判定基準には含めない（下記「非公開情報についての方針」参照）
 - **例外の変換:** 429・5xx・通信エラーは `ExternalServiceError` 側（記事単位でスキップ。リトライはSDKの自動リトライ、既定2回）、
   認証エラー・400は `InternalError` 側（設定やコードの修正が必要）。`stop_reason` が `refusal`（防衛関連の内容のため拒否され得る）
-  や `max_tokens` の場合もその記事をスキップしWARNとする
+  や `max_tokens` の場合もその記事をスキップしWARNとする。記事単位でスキップする原因はすべて `ArticleAnalysisUnavailableError`
+  にまとめて `reason` で区別し、設定・コードの修正が必要なものは `ArticleAnalysisRequestError` とする
 - **長すぎる本文は切り詰めない:** 三菱電機のIR資料のように数十ページに及ぶ本文があるため、上限を設けて超えた記事はスキップする
   （黙って切り詰めると要約の欠落に気付けないため）
 - **後回しにするもの:** プロンプトキャッシュ（システムプロンプトがキャッシュの最小サイズに届かない可能性があるため、実際の
@@ -295,9 +296,11 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 ApplicationError（基底）
  ├── ExternalServiceError（外部起因 → WARN。放置 or リトライ。通知しない）
  │     ├── ArticleSourceUnavailableError   ソース全体から取得できない（一覧ページの取得失敗等）
- │     └── ArticleContentUnavailableError  個別記事の本文を取得・抽出できない（PDFの破損等）
+ │     ├── ArticleContentUnavailableError  個別記事の本文を取得・抽出できない（PDFの破損等）
+ │     └── ArticleAnalysisUnavailableError 個別記事をAIで分析できない（429・5xx・通信エラー、拒否・出力上限、本文が長すぎる）
  └── InternalError（自分起因 → ERROR。コードを直す。通知する）
-       └── SourceStructureChangedError     取得元のページ構造が想定と異なる
+       ├── SourceStructureChangedError     取得元のページ構造が想定と異なる
+       └── ArticleAnalysisRequestError     分析サービスがリクエスト自体を受け付けない（認証エラー・400）
 ```
 
 ### 分類の基準
