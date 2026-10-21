@@ -39,6 +39,29 @@ class ArticleContentUnavailableError(ExternalServiceError):
     """
 
 
+class ArticleAnalysisUnavailableError(ExternalServiceError):
+    """個別記事をAIで分析できないことを表す（APIの一時的な障害、応答の拒否、本文が長すぎる等）。
+
+    その記事だけの問題であり、呼び出し元は記事をスキップして処理を継続する。
+    """
+
+    def __init__(self, article_url: str, reason: str) -> None:
+        super().__init__(f"記事 '{article_url}' を分析できません: {reason}")
+        self.article_url = article_url
+        self.reason = reason
+
+
+class ArticleAnalysisRequestError(InternalError):
+    """分析サービスがリクエスト自体を受け付けないことを表す（認証エラー、不正なリクエスト等）。
+
+    どの記事でも同じく失敗するため、記事をスキップせず、設定やコードを修正する。
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"分析サービスがリクエストを受け付けません: {reason}")
+        self.reason = reason
+
+
 class SourceStructureChangedError(InternalError):
     """記事の取得元のページ構造が想定と異なり、記事情報を抽出できないことを表す。
 

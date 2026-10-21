@@ -2,6 +2,8 @@ import pytest
 
 from app.use_cases.errors import (
     ApplicationError,
+    ArticleAnalysisRequestError,
+    ArticleAnalysisUnavailableError,
     ArticleContentUnavailableError,
     ArticleSourceUnavailableError,
     ExternalServiceError,
@@ -43,11 +45,30 @@ def test_source_structure_changed_error_holds_source_and_reason() -> None:
     assert str(error) == "記事ソース 'mod' のページ構造が想定と異なります: 一覧が空"
 
 
+def test_article_analysis_unavailable_error_holds_article_url_and_reason() -> None:
+    error = ArticleAnalysisUnavailableError(
+        article_url="https://example.com/news/1", reason="応答が拒否された"
+    )
+
+    assert error.article_url == "https://example.com/news/1"
+    assert error.reason == "応答が拒否された"
+    assert str(error) == "記事 'https://example.com/news/1' を分析できません: 応答が拒否された"
+
+
+def test_article_analysis_request_error_holds_reason() -> None:
+    error = ArticleAnalysisRequestError(reason="認証エラー")
+
+    assert error.reason == "認証エラー"
+    assert str(error) == "分析サービスがリクエストを受け付けません: 認証エラー"
+
+
 @pytest.mark.parametrize(
     ("error_class", "category"),
     [
         (ArticleSourceUnavailableError, ExternalServiceError),
         (ArticleContentUnavailableError, ExternalServiceError),
+        (ArticleAnalysisUnavailableError, ExternalServiceError),
+        (ArticleAnalysisRequestError, InternalError),
         (SourceStructureChangedError, InternalError),
     ],
 )
