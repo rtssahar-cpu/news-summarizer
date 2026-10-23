@@ -80,7 +80,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
      （`claude_article_analyzer.py` の `ClaudeArticleAnalyzer`。`feat/phase1-analysis-output-schema`）
    - ✅ 4-6. 本ドキュメントの更新（実装状況・注意点）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる。方針は下記「日次処理の方針」参照）
-   - ⬜ 5-1. use_cases: ポート `ArticleRepository`（Protocol）と、DB保存の失敗を表す例外（`InternalError` 側）
+   - ✅ 5-1. use_cases: ポート `ArticleRepository`（Protocol。`article_repository.py` の `exists_by_url` / `save_with_analysis`）と、
+     保存先の読み書きの失敗を表す例外（`errors.py` の `ArticleStorageError`。`feat/phase1-article-repository-port`）
    - ⬜ 5-2. gateway: SQLAlchemyによる `ArticleRepository` の実装（Sessionを注入）
    - ⬜ 5-3. use_cases: 日次処理ユースケースのうち、記事1件の処理（DBにあればスキップ→分析→保存）
    - ⬜ 5-4. use_cases: ソース単位のループ・例外の扱い・結果の集計
@@ -312,7 +313,7 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 - **例外の扱い:**
   - `ArticleAnalysisUnavailableError`: WARNを出し、その記事だけスキップする
   - `ArticleSourceUnavailableError`（WARN）・`SourceStructureChangedError`（ERROR）: そのソースだけ中断し、他のソースは続ける
-  - `ArticleAnalysisRequestError`（認証エラー・400）とDB保存の失敗: どの記事でも失敗するため、処理全体を中断する
+  - `ArticleAnalysisRequestError`（認証エラー・400）と `ArticleStorageError`（DBの読み書きの失敗）: どの記事でも失敗するため、処理全体を中断する
 
 ### カテゴリ分類（`app/entities/category.py`）
 
@@ -357,7 +358,8 @@ ApplicationError（基底）
  │     └── ArticleAnalysisUnavailableError 個別記事をAIで分析できない（429・5xx・通信エラー、拒否・出力上限、本文が長すぎる）
  └── InternalError（自分起因 → ERROR。コードを直す。通知する）
        ├── SourceStructureChangedError     取得元のページ構造が想定と異なる
-       └── ArticleAnalysisRequestError     分析サービスがリクエスト自体を受け付けない（認証エラー・400）
+       ├── ArticleAnalysisRequestError     分析サービスがリクエスト自体を受け付けない（認証エラー・400）
+       └── ArticleStorageError             記事の保存先（DB）の読み書きに失敗した（保存済みかの確認・保存）
 ```
 
 ### 分類の基準
