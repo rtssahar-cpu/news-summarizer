@@ -82,7 +82,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる。方針は下記「日次処理の方針」参照）
    - ✅ 5-1. use_cases: ポート `ArticleRepository`（Protocol。`article_repository.py` の `exists_by_url` / `save_with_analysis`）と、
      保存先の読み書きの失敗を表す例外（`errors.py` の `ArticleStorageError`。`feat/phase1-article-repository-port`）
-   - ⬜ 5-2. gateway: SQLAlchemyによる `ArticleRepository` の実装（Sessionを注入）
+   - ✅ 5-2. gateway: SQLAlchemyによる `ArticleRepository` の実装（`sqlalchemy_article_repository.py` の
+     `SqlAlchemyArticleRepository`。Sessionを注入。`feat/phase1-sqlalchemy-article-repository`）
    - ⬜ 5-3. use_cases: 日次処理ユースケースのうち、記事1件の処理（DBにあればスキップ→分析→保存）
    - ⬜ 5-4. use_cases: ソース単位のループ・例外の扱い・結果の集計
    - ⬜ 5-5. frameworks: `daily_job.py`（環境変数の読み込み・依存の組み立て・ログ設定・終了コード）
@@ -307,6 +308,14 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - `Article` と `Summary` は1つのトランザクションで保存し、**記事ごとにコミットする**（途中で落ちても保存済みの記事は残る）。
     `ArticleAnalysis` から `Summary` への変換は保存時に行う
   - 最後にソース別の件数（新規保存・既存のためスキップ・失敗）を結果として返し、ログに出す
+- **リポジトリの実装（`SqlAlchemyArticleRepository`）の注意点:**
+  - Sessionの生成・破棄はframeworks層（ステップ5-5）が担い、リポジトリには注入する。1回の日次処理で1つのSessionを使い回す想定
+  - `Summary` は `ArticleModel.summary` のrelationship経由で紐付けるため、記事のid採番前でも1回のコミットで両方保存できる。
+    カテゴリは `Category.value`（文字列）の配列として保存する
+  - `SQLAlchemyError` は `ArticleStorageError` に変換する。保存失敗時はロールバックしてから送出するため、同じSessionを使い続けられる
+  - CIのテスト環境にはPostgresがなく、`ARRAY` 型のためSQLiteでも代用できないので、単体テストはSessionをモック
+    （`create_autospec(Session)`）にしている。実DBでの動作（保存・重複URLでの `IntegrityError` の変換）はローカルの
+    `docker compose up -d db` ＋ `alembic upgrade head` で確認済み
 - **分析できなかった記事は保存しない:** `ArticleAnalysisUnavailableError` の記事はDBに残さず、翌日に再挑戦させる
   （429・5xx等の一時的な失敗は自然に回復する）。拒否（`refusal`）された記事は毎日分析されて料金がかかるが、まれなため許容する。
   本文が長すぎる記事はAPIを呼ぶ前に判定するため料金はかからない
