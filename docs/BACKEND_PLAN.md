@@ -84,7 +84,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
      保存先の読み書きの失敗を表す例外（`errors.py` の `ArticleStorageError`。`feat/phase1-article-repository-port`）
    - ✅ 5-2. gateway: SQLAlchemyによる `ArticleRepository` の実装（`sqlalchemy_article_repository.py` の
      `SqlAlchemyArticleRepository`。Sessionを注入。`feat/phase1-sqlalchemy-article-repository`）
-   - ⬜ 5-3. use_cases: 日次処理ユースケースのうち、記事1件の処理（DBにあればスキップ→分析→保存）
+   - ✅ 5-3. use_cases: 日次処理ユースケースのうち、記事1件の処理（DBにあればスキップ→分析→保存。`process_article.py` の
+     `ArticleProcessor` と、処理結果を表す `ArticleOutcome`。`feat/phase1-process-article`）
    - ⬜ 5-4. use_cases: ソース単位のループ・例外の扱い・結果の集計
    - ⬜ 5-5. frameworks: `daily_job.py`（環境変数の読み込み・依存の組み立て・ログ設定・終了コード）
    - ⬜ 5-6. 本ドキュメントの更新（実装状況・注意点）
@@ -316,6 +317,11 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - CIのテスト環境にはPostgresがなく、`ARRAY` 型のためSQLiteでも代用できないので、単体テストはSessionをモック
     （`create_autospec(Session)`）にしている。実DBでの動作（保存・重複URLでの `IntegrityError` の変換）はローカルの
     `docker compose up -d db` ＋ `alembic upgrade head` で確認済み
+- **記事1件の処理（`ArticleProcessor`）:** `ArticleAnalyzer` と `ArticleRepository` を注入し、`process()` で処理結果を
+  `ArticleOutcome`（`saved`・`already_stored`・`analysis_failed`）として返す。ソース別の件数の集計（ステップ5-4）に使う
+  - `ArticleOutcome` は `Category` と同じく `StrEnum` にしている（集計結果のログ・将来のAPIで値をそのまま文字列として出せるため）
+  - 捕捉するのは `ArticleAnalysisUnavailableError` のみ（WARNを出して `analysis_failed`）。処理全体を中断する例外
+    （`ArticleAnalysisRequestError`・`ArticleStorageError`）は捕捉せずに呼び出し元へ伝える
 - **分析できなかった記事は保存しない:** `ArticleAnalysisUnavailableError` の記事はDBに残さず、翌日に再挑戦させる
   （429・5xx等の一時的な失敗は自然に回復する）。拒否（`refusal`）された記事は毎日分析されて料金がかかるが、まれなため許容する。
   本文が長すぎる記事はAPIを呼ぶ前に判定するため料金はかからない
