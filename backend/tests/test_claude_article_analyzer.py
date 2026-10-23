@@ -3,7 +3,20 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock
 
+import httpx2
 import pytest
+from anthropic import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    AuthenticationError,
+    BadRequestError,
+    InternalServerError,
+    NotFoundError,
+    OverloadedError,
+    PermissionDeniedError,
+    RateLimitError,
+)
 from anthropic.types import Message
 
 from app.entities.article import Article
@@ -13,7 +26,10 @@ from app.interface_adapters.gateways.claude_article_analyzer import (
     MODEL,
     ClaudeArticleAnalyzer,
 )
-from app.use_cases.errors import ArticleAnalysisUnavailableError
+from app.use_cases.errors import (
+    ArticleAnalysisRequestError,
+    ArticleAnalysisUnavailableError,
+)
 
 VALID_OUTPUT = {
     "summary_text": "概要: 防衛装備庁と契約を締結した。",
@@ -50,6 +66,21 @@ def make_response(text: str, stop_reason: str = "end_turn") -> Message:
             "usage": {"input_tokens": 3000, "output_tokens": 500},
         }
     )
+
+
+API_REQUEST = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+
+
+def make_status_error(error_class: type[APIStatusError], status_code: int) -> APIStatusError:
+    """SDKがステータスコードに応じて送出する例外クラスで、エラー応答を作る。"""
+    response = httpx2.Response(status_code, request=API_REQUEST)
+    return error_class(f"Error code: {status_code}", response=response, body=None)
+
+
+def make_failing_analyzer(error: Exception) -> ClaudeArticleAnalyzer:
+    client = MagicMock()
+    client.messages.create.side_effect = error
+    return ClaudeArticleAnalyzer(client)
 
 
 def make_analyzer(response: Message) -> tuple[ClaudeArticleAnalyzer, MagicMock]:
@@ -111,3 +142,42 @@ def test_analyze_skips_article_when_output_cannot_be_converted(text: str) -> Non
 
     with pytest.raises(ArticleAnalysisUnavailableError, match="応答を解析できません"):
         analyzer.analyze(make_article())
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        make_status_error(RateLimitError, 429),
+        make_status_error(InternalServerError, 500),
+        make_status_error(InternalServerError, 503),
+        make_status_error(OverloadedError, 529),
+        APIConnectionError(request=API_REQUEST),
+        APITimeoutError(request=API_REQUEST),
+    ],
+)
+def test_analyze_skips_article_on_temporary_api_failure(error: Exception) -> None:
+    analyzer = make_failing_analyzer(error)
+
+    with pytest.raises(ArticleAnalysisUnavailableError) as raised:
+        analyzer.analyze(make_article())
+    assert raised.value.__cause__ is error
+
+
+@pytest.mark.parametrize(
+    ("error_class", "status_code"),
+    [
+        (BadRequestError, 400),
+        (AuthenticationError, 401),
+        (PermissionDeniedError, 403),
+        (NotFoundError, 404),
+    ],
+)
+def test_analyze_raises_request_error_when_api_rejects_request(
+    error_class: type[APIStatusError], status_code: int
+) -> None:
+    error = make_status_error(error_class, status_code)
+    analyzer = make_failing_analyzer(error)
+
+    with pytest.raises(ArticleAnalysisRequestError, match=str(status_code)) as raised:
+        analyzer.analyze(make_article())
+    assert raised.value.__cause__ is error

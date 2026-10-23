@@ -1,8 +1,15 @@
 import logging
 
-from anthropic import Anthropic, transform_schema
+from anthropic import (
+    Anthropic,
+    APIConnectionError,
+    APIStatusError,
+    InternalServerError,
+    OverloadedError,
+    RateLimitError,
+    transform_schema,
+)
 from anthropic.types import Message, OutputConfigParam
-from pydantic import ValidationError
 
 from app.entities.article import Article
 from app.entities.article_analysis import ArticleAnalysis
@@ -11,7 +18,10 @@ from app.interface_adapters.gateways.article_analysis_prompt import (
     build_system_prompt,
     build_user_message,
 )
-from app.use_cases.errors import ArticleAnalysisUnavailableError
+from app.use_cases.errors import (
+    ArticleAnalysisRequestError,
+    ArticleAnalysisUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +47,25 @@ class ClaudeArticleAnalyzer:
                 article.url,
                 f"本文が長すぎます（{len(article.body)}文字。上限{MAX_BODY_LENGTH}文字）",
             )
-        response = self._client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_OUTPUT_TOKENS,
-            system=build_system_prompt(),
-            messages=[{"role": "user", "content": build_user_message(article)}],
-            output_config=OUTPUT_CONFIG,
-        )
+        try:
+            response = self._client.messages.create(
+                model=MODEL,
+                max_tokens=MAX_OUTPUT_TOKENS,
+                system=build_system_prompt(),
+                messages=[{"role": "user", "content": build_user_message(article)}],
+                output_config=OUTPUT_CONFIG,
+            )
+        except APIConnectionError as error:
+            # タイムアウト（APITimeoutError）も含む。SDKの自動リトライ後もなお失敗した場合に届く
+            raise ArticleAnalysisUnavailableError(article.url, f"通信エラー: {error}") from error
+        except (RateLimitError, OverloadedError, InternalServerError) as error:
+            # 429・529・その他の5xx（SDKは529をInternalServerErrorではなくOverloadedErrorにする）
+            raise ArticleAnalysisUnavailableError(
+                article.url, f"APIが一時的に利用できません: {error.message}"
+            ) from error
+        except APIStatusError as error:
+            # 認証エラー・400等。どの記事でも同じく失敗するため、設定やコードの修正が必要
+            raise ArticleAnalysisRequestError(error.message) from error
         logger.info(
             "記事を分析しました: %s（入力%dトークン、出力%dトークン）",
             article.url,
@@ -64,9 +86,10 @@ def _to_analysis(article_url: str, response: Message) -> ArticleAnalysis:
     if response.stop_reason == "max_tokens":
         raise ArticleAnalysisUnavailableError(article_url, "応答が出力上限に達しました")
     text = "".join(block.text for block in response.content if block.type == "text")
+    # pydanticのValidationErrorもValueErrorのサブクラスのため、まとめて捕捉する
     try:
         return ArticleAnalysisOutput.model_validate_json(text).to_entity()
-    except (ValidationError, ValueError) as error:
+    except ValueError as error:
         raise ArticleAnalysisUnavailableError(
             article_url, f"応答を解析できません: {error}"
         ) from error
