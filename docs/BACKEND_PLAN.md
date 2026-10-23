@@ -79,8 +79,14 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 4-5. gateway: 構造化出力のスキーマと `ArticleAnalysis` への変換（`article_analysis_output.py`）、API呼び出し・例外の変換
      （`claude_article_analyzer.py` の `ClaudeArticleAnalyzer`。`feat/phase1-analysis-output-schema`）
    - ✅ 4-6. 本ドキュメントの更新（実装状況・注意点）
-5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
-6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
+5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる。方針は下記「日次処理の方針」参照）
+   - ⬜ 5-1. use_cases: ポート `ArticleRepository`（Protocol）と、DB保存の失敗を表す例外（`InternalError` 側）
+   - ⬜ 5-2. gateway: SQLAlchemyによる `ArticleRepository` の実装（Sessionを注入）
+   - ⬜ 5-3. use_cases: 日次処理ユースケースのうち、記事1件の処理（DBにあればスキップ→分析→保存）
+   - ⬜ 5-4. use_cases: ソース単位のループ・例外の扱い・結果の集計
+   - ⬜ 5-5. frameworks: `daily_job.py`（環境変数の読み込み・依存の組み立て・ログ設定・終了コード）
+   - ⬜ 5-6. 本ドキュメントの更新（実装状況・注意点）
+6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す。ACA上のAPIをフロントエンドから呼ぶ）
 
 ### データソースに関する注意点（防衛省）
 
@@ -280,6 +286,33 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   約150件中8件）で、同じ記事は再分析しないため、月額への影響は$1〜2程度の想定
 - **後回しにするもの:** プロンプトキャッシュ（システムプロンプトがキャッシュの最小サイズに届かない可能性があるため、実際の
   `usage` を見て判断する）、Batch API（料金50%引きだがポーリング処理が増えるため）
+
+### 日次処理の方針（ステップ5）
+
+2026-10-23にユーザーと合意した方針。
+
+- **要約の届け方:** フロントエンド（Static Web Apps）を開くと、ACA上のAPI（ステップ6）からその日の要約一覧を取得する。
+  ブラウザからDBへは直接接続できないため、間にAPIを置く。静的ファイルの生成や通知（メール等）で届ける方法はACAが不要に
+  なるが、後から検索・カテゴリでの絞り込みを加えにくいため採用しない
+- **定期実行は Azure Container Apps Jobs（cron）で行う:** 既存のContainer App（API）と同じイメージを使い、起動コマンドだけ
+  `python -m app.frameworks.daily_job` にする。Container Appはスケールtoゼロのため、アプリ内のスケジューラでは毎朝の
+  起動が保証されない。**ステップ5ではユースケースとCLIの入口までを作り**、Jobの作成・Job側のシークレット（`DATABASE_URL`・
+  `ANTHROPIC_API_KEY`）の登録・`deploy-backend.yml` でのJobのイメージ更新は別のステップで行う。ローカルでは
+  `docker compose run backend python -m app.frameworks.daily_job` で確認する
+- **取得元の渡し方:** fetcherはframeworks層で組み立て、ユースケースには `dict[str, ArticleFetcher]`（ソース名→fetcher）で渡す
+- **処理の流れ:** ソースごと・記事ごとに順番に処理する（並列化しない。40記事程度なら十数分で終わり、レート制限も避けやすい）
+  - fetcherは本文付きの記事を返すため、「本文取得」は既存のfetcherを呼ぶだけでよい
+  - 分析の前にURLでDBを確認し、保存済みの記事はAPIを呼ばずにスキップする（料金対策）
+  - `Article` と `Summary` は1つのトランザクションで保存し、**記事ごとにコミットする**（途中で落ちても保存済みの記事は残る）。
+    `ArticleAnalysis` から `Summary` への変換は保存時に行う
+  - 最後にソース別の件数（新規保存・既存のためスキップ・失敗）を結果として返し、ログに出す
+- **分析できなかった記事は保存しない:** `ArticleAnalysisUnavailableError` の記事はDBに残さず、翌日に再挑戦させる
+  （429・5xx等の一時的な失敗は自然に回復する）。拒否（`refusal`）された記事は毎日分析されて料金がかかるが、まれなため許容する。
+  本文が長すぎる記事はAPIを呼ぶ前に判定するため料金はかからない
+- **例外の扱い:**
+  - `ArticleAnalysisUnavailableError`: WARNを出し、その記事だけスキップする
+  - `ArticleSourceUnavailableError`（WARN）・`SourceStructureChangedError`（ERROR）: そのソースだけ中断し、他のソースは続ける
+  - `ArticleAnalysisRequestError`（認証エラー・400）とDB保存の失敗: どの記事でも失敗するため、処理全体を中断する
 
 ### カテゴリ分類（`app/entities/category.py`）
 
