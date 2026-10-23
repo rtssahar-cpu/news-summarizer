@@ -71,13 +71,14 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 三菱電機（`melco_fetcher.py`。`feat/phase1-melco-fetcher`）
    - ✅ NEC（`nec_fetcher.py`。`feat/phase1-nec-fetcher`）
    - ➖ 富士通（対象外。サイト全体がbot対策でブロックされ、正規の取得経路がないため。下記参照）
-4. ⬜ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく。方針は下記「カテゴリ判定＋要約の方針」参照）
+4. ✅ カテゴリ判定＋要約ユースケース（Claude APIを使用。`app/entities/category.py`の分類に基づく。方針は下記「カテゴリ判定＋要約の方針」参照）
    - ✅ 4-1. entities: 分析結果の値オブジェクト `ArticleAnalysis`（`article_analysis.py`）と、各カテゴリの判定基準（`category.py` の `CATEGORY_CRITERIA`。`feat/phase1-article-analysis`）
    - ✅ 4-2. use_cases: ポート `ArticleAnalyzer`（Protocol。`article_analyzer.py`）と、分析失敗を表す例外（`errors.py` の `ArticleAnalysisUnavailableError` / `ArticleAnalysisRequestError`。`feat/phase1-article-analyzer-port`）
    - ✅ 4-3. `anthropic` パッケージの追加（`uv add`。1.17.0。`feat/phase1-claude-article-analyzer`）
    - ✅ 4-4. gateway: プロンプトの組み立て（純粋関数 `build_system_prompt` / `build_user_message`。`article_analysis_prompt.py`。`feat/phase1-analysis-prompt`）
-   - ⬜ 4-5. gateway: API呼び出し・レスポンスの変換・例外の変換とテスト（`claude_article_analyzer.py`）
-   - ⬜ 4-6. 本ドキュメントの更新（実装状況・注意点）
+   - ✅ 4-5. gateway: 構造化出力のスキーマと `ArticleAnalysis` への変換（`article_analysis_output.py`）、API呼び出し・例外の変換
+     （`claude_article_analyzer.py` の `ClaudeArticleAnalyzer`。`feat/phase1-analysis-output-schema`）
+   - ✅ 4-6. 本ドキュメントの更新（実装状況・注意点）
 5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す）
 
@@ -230,7 +231,7 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 - **モデルは Claude Sonnet 5.5（`claude-sonnet-5-5`）:** 1日40記事（8ソース×5件）・1記事あたり入力約3,000／出力約500トークンの
   想定で月約$13。Opus 5.5（約$27）より安く、Haiku 5.5（約$1）より細かい判定基準（UUV 10m以上等）の精度が期待できるため
 - **分類と要約は1回のAPI呼び出しで行う:** 要約・該当カテゴリ・`mentions_price`・`mentions_israel` をまとめて返させる。
-  返り値は構造化出力（`output_config.format`、SDKの `messages.parse()`）でスキーマを固定し、自前でJSONを解析しない
+  返り値は構造化出力（`output_config.format`）でスキーマを固定し、自前でJSONを解析しない（下記「API呼び出し」参照）
 - **防衛と無関係な記事（カテゴリ0件）も要約し、DBに記録を残す:** 各ソースは毎朝「新しい順に数件」取得するため前日と同じ記事が
   多く含まれ、記録がないと同じ記事を毎日分析して料金がかかる。また誤判定（判定漏れ）を後から確認できるようにする。
   フロントエンド向けの一覧（ステップ6）ではカテゴリ1件以上の記事のみ返す想定
@@ -248,10 +249,25 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - 無人アセットの大きさ・航続距離の基準は、記事に数値がなくても機種名等から満たすと判断できれば該当とする。USV・UGVは大きさを問わない
   - 防空システムのみ「日本の」ものに限る。AMD・IAMD、スタンドオフミサイル、電子戦、早期警戒機は国を限定しない
   - 「非公開情報」はカテゴリではなく取得元の選び方の方針のため、判定基準には含めない（下記「非公開情報についての方針」参照）
+- **API呼び出し（`claude_article_analyzer.py`）:** 2026-10-21にユーザーと合意した設定は以下のとおり
+  - **effort は `medium`、`max_tokens` は16000:** 月10数ドルに抑えつつ品質・精度を優先するため。Sonnet 5.5は思考が既定で有効で、
+    思考トークンも `max_tokens` と料金に含まれるため、出力上限には余裕を持たせている
+  - **`messages.parse()` ではなく `messages.create()` を使う:** SDKの `parse()` は `stop_reason` を確認する前に応答のJSONを検証し、
+    拒否や出力上限で途中までのJSONになると原因の分からない `ValidationError` を送出するため。スキーマは `transform_schema` で
+    pydanticのモデル（`ArticleAnalysisOutput`）から作って `output_config.format` に渡し、`stop_reason` を確認してから
+    `model_validate_json` で検証する
+  - **カテゴリはスキーマで `Category` の値に限定する:** 未知のコードは返らない。モデルが同じカテゴリを重複して返した場合は、
+    `to_entity()` で順序を保って1つにまとめる
+  - **入力・出力トークン数を記事ごとにINFOログに出す:** 運用後に実際の料金を確認し、本文の上限やeffortを見直すため
+  - **拒否時のフォールバック（beta）は使わない:** Sonnet 5へ切り替えて救えるのは `cyber`・`frontier_llm` の拒否のみで、
+    防衛関連で起きやすい `general_harms` は対象外のため。拒否された記事はスキップする
 - **例外の変換:** 429・5xx・通信エラーは `ExternalServiceError` 側（記事単位でスキップ。リトライはSDKの自動リトライ、既定2回）、
   認証エラー・400は `InternalError` 側（設定やコードの修正が必要）。`stop_reason` が `refusal`（防衛関連の内容のため拒否され得る）
   や `max_tokens` の場合もその記事をスキップしWARNとする。記事単位でスキップする原因はすべて `ArticleAnalysisUnavailableError`
   にまとめて `reason` で区別し、設定・コードの修正が必要なものは `ArticleAnalysisRequestError` とする
+  - **SDKは529（過負荷）を `InternalServerError` ではなく `OverloadedError` として送出する:** `InternalServerError` だけを
+    捕捉すると529が `APIStatusError` 側（設定・コードの修正が必要）に分類されてしまうため、`RateLimitError`・`OverloadedError`・
+    `InternalServerError` を並べて捕捉している。テストでも、SDKが実際に送出するクラスで例外を作ること
 - **プロンプトの組み立て（`article_analysis_prompt.py`）:** システムプロンプトは判定基準の定数を並べるだけで記事に依存せず、
   毎回同じ内容になる（プロンプトキャッシュを後から導入できるようにするため）。見出しには構造化出力の項目名
   （`matched_categories` 等）を使い、カテゴリはコード（`Category` の値）で答えさせる。記事はユーザーメッセージ側で
@@ -259,7 +275,9 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - **発表日は日本時間の日付にする:** 取得時は日本時間だが、DBから読み出すとUTCになり得るため、`astimezone(JST)` で揃える
   - **取得元のコード（`mhi` 等）は渡さない:** モデルには意味が通じない略号のため。発表元はURLのドメインと本文から判断させる
 - **長すぎる本文は切り詰めない:** 三菱電機のIR資料のように数十ページに及ぶ本文があるため、上限を設けて超えた記事はスキップする
-  （黙って切り詰めると要約の欠落に気付けないため）
+  （黙って切り詰めると要約の欠落に気付けないため）。上限は**20万文字**（`MAX_BODY_LENGTH`）で、APIを呼ぶ前に判定する。
+  日本語は1文字あたり約0.7〜1トークンのため、上限ちょうどでも1記事あたり最大$0.3〜0.4程度。長い記事はまれ（三菱電機で
+  約150件中8件）で、同じ記事は再分析しないため、月額への影響は$1〜2程度の想定
 - **後回しにするもの:** プロンプトキャッシュ（システムプロンプトがキャッシュの最小サイズに届かない可能性があるため、実際の
   `usage` を見て判断する）、Batch API（料金50%引きだがポーリング処理が増えるため）
 
