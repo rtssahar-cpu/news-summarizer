@@ -6,6 +6,7 @@ from app.use_cases.errors import (
     ArticleAnalysisUnavailableError,
     ArticleContentUnavailableError,
     ArticleSourceUnavailableError,
+    ArticleStorageError,
     ExternalServiceError,
     InternalError,
     SourceStructureChangedError,
@@ -62,6 +63,13 @@ def test_article_analysis_request_error_holds_reason() -> None:
     assert str(error) == "分析サービスがリクエストを受け付けません: 認証エラー"
 
 
+def test_article_storage_error_holds_reason() -> None:
+    error = ArticleStorageError(reason="接続できない")
+
+    assert error.reason == "接続できない"
+    assert str(error) == "記事の保存先の読み書きに失敗しました: 接続できない"
+
+
 @pytest.mark.parametrize(
     ("error_class", "category"),
     [
@@ -70,6 +78,7 @@ def test_article_analysis_request_error_holds_reason() -> None:
         (ArticleAnalysisUnavailableError, ExternalServiceError),
         (ArticleAnalysisRequestError, InternalError),
         (SourceStructureChangedError, InternalError),
+        (ArticleStorageError, InternalError),
     ],
 )
 def test_concrete_errors_belong_to_expected_category(

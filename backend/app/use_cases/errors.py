@@ -72,3 +72,14 @@ class SourceStructureChangedError(InternalError):
         super().__init__(f"記事ソース '{source}' のページ構造が想定と異なります: {reason}")
         self.source = source
         self.reason = reason
+
+
+class ArticleStorageError(InternalError):
+    """記事の保存先（DB等）の読み書きに失敗したことを表す。
+
+    どの記事でも同じく失敗するため、記事をスキップせず処理全体を中断する。
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"記事の保存先の読み書きに失敗しました: {reason}")
+        self.reason = reason
