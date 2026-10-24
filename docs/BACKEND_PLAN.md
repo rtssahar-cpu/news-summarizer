@@ -86,7 +86,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
      `SqlAlchemyArticleRepository`。Sessionを注入。`feat/phase1-sqlalchemy-article-repository`）
    - ✅ 5-3. use_cases: 日次処理ユースケースのうち、記事1件の処理（DBにあればスキップ→分析→保存。`process_article.py` の
      `ArticleProcessor` と、処理結果を表す `ArticleOutcome`。`feat/phase1-process-article`）
-   - ⬜ 5-4. use_cases: ソース単位のループ・例外の扱い・結果の集計
+   - ✅ 5-4. use_cases: ソース単位のループ・例外の扱い・結果の集計（`process_daily_articles.py` の `DailyArticleProcessor` と、
+     ソース別の結果を表す `SourceResult`。`feat/phase1-process-daily-articles`）
    - ⬜ 5-5. frameworks: `daily_job.py`（環境変数の読み込み・依存の組み立て・ログ設定・終了コード）
    - ⬜ 5-6. 本ドキュメントの更新（実装状況・注意点）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す。ACA上のAPIをフロントエンドから呼ぶ）
@@ -322,6 +323,15 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - `ArticleOutcome` は `Category` と同じく `StrEnum` にしている（集計結果のログ・将来のAPIで値をそのまま文字列として出せるため）
   - 捕捉するのは `ArticleAnalysisUnavailableError` のみ（WARNを出して `analysis_failed`）。処理全体を中断する例外
     （`ArticleAnalysisRequestError`・`ArticleStorageError`）は捕捉せずに呼び出し元へ伝える
+- **ソース単位の処理（`DailyArticleProcessor`）:** `dict[str, ArticleFetcher]` と `ArticleProcessor` を注入し、`run()` で
+  ソースごとに最新 `articles_per_source` 件（既定5件）を取得→1件ずつ `ArticleProcessor` に渡し、ソース別の `SourceResult` の
+  タプルを返す。過去の記事は遡らず、毎朝その時点の最新数件だけを見る（保存済みの記事は `already_stored` になる）
+  - `SourceResult` は処理結果ごとの件数（`outcome_counts`。0件の処理結果も含める）と、ソース単位で中断した場合の原因
+    （`fetch_error`）を持つ。例外の種類を残すのは、終了コード（ステップ5-5）を「ページ構造の変更があれば非0」のように
+    決められるようにするため
+  - 取得の失敗（`ArticleSourceUnavailableError` はWARN、`SourceStructureChangedError` はERROR）はそのソースだけ中断して次へ進む。
+    処理全体を中断する例外は捕捉しない。それまでに保存した記事は記事ごとのコミットで残り、翌日は `already_stored` になる
+  - ソースごとに `ソース 'mod' の処理結果: saved=1, already_stored=3, analysis_failed=1` の形式でINFOログを出す
 - **分析できなかった記事は保存しない:** `ArticleAnalysisUnavailableError` の記事はDBに残さず、翌日に再挑戦させる
   （429・5xx等の一時的な失敗は自然に回復する）。拒否（`refusal`）された記事は毎日分析されて料金がかかるが、まれなため許容する。
   本文が長すぎる記事はAPIを呼ぶ前に判定するため料金はかからない
