@@ -88,7 +88,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
      `ArticleProcessor` と、処理結果を表す `ArticleOutcome`。`feat/phase1-process-article`）
    - ✅ 5-4. use_cases: ソース単位のループ・例外の扱い・結果の集計（`process_daily_articles.py` の `DailyArticleProcessor` と、
      ソース別の結果を表す `SourceResult`。`feat/phase1-process-daily-articles`）
-   - ⬜ 5-5. frameworks: `daily_job.py`（環境変数の読み込み・依存の組み立て・ログ設定・終了コード）
+   - ✅ 5-5. frameworks: `daily_job.py`（環境変数の読み込み・依存の組み立て・ログ設定・終了コード。`build_fetchers` /
+     `decide_exit_code` / `run_daily_job` / `main`。`feat/phase1-daily-job`）
    - ⬜ 5-6. 本ドキュメントの更新（実装状況・注意点）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す。ACA上のAPIをフロントエンドから呼ぶ）
 
@@ -332,6 +333,24 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - 取得の失敗（`ArticleSourceUnavailableError` はWARN、`SourceStructureChangedError` はERROR）はそのソースだけ中断して次へ進む。
     処理全体を中断する例外は捕捉しない。それまでに保存した記事は記事ごとのコミットで残り、翌日は `already_stored` になる
   - ソースごとに `ソース 'mod' の処理結果: saved=1, already_stored=3, analysis_failed=1` の形式でINFOログを出す
+- **日次ジョブの入口（`app/frameworks/daily_job.py`）:** `python -m app.frameworks.daily_job` で起動する
+  - `build_fetchers(client)`: 対象8ソース（`mod`・`mhi`・`khi`・`subaru`・`ihi`・`melco`・`nec`・`hitachi`。この順に処理）の
+    ソース名→fetcherを返す。ソース名は各パーサーの `SOURCE_NAME` を使い、全fetcherで1つの `httpx.Client` を共有する
+  - `httpx.Client` のタイムアウトは30秒（PDFの取得もあるため、httpxの既定の5秒より長くする）。リダイレクトは追わない
+    （httpxの既定のまま。各fetcherはこの前提で作っている）
+  - `main()`: INFO以上のログを時刻・レベル・ロガー名付きで出す設定をし、`ANTHROPIC_API_KEY` を読み込んで（未設定ならERRORを
+    出して終了コード1）、`httpx.Client`・`Anthropic`・`SessionLocal()` を `with` でまとめて開いて依存を組み立てる。
+    終了時に接続は必ず閉じる。DBの接続先は既存の `database.py`（`DATABASE_URL` または `POSTGRES_*`）を使う
+  - `run_daily_job(processor)`: 処理全体を中断する例外（`ArticleAnalysisRequestError`・`ArticleStorageError`・想定外の例外）は
+    スタックトレース付きでERRORログに出し、終了コード1を返す
+  - **終了コード（`decide_exit_code`）:** 2026-10-24にユーザーと合意。コードや設定の修正が必要な失敗があれば1（ACA Jobsで
+    失敗として扱われ、通知の対象にする）、それ以外は0
+    - 1: いずれかのソースが `InternalError`（`SourceStructureChangedError` 等）で中断した、または処理全体が中断した
+    - 0: 一時的な取得失敗（`ArticleSourceUnavailableError`）・分析の失敗（`ArticleAnalysisUnavailableError`）のみ。翌日に
+      自然に回復するため
+  - 単体テストでは `SessionLocal` と `run_daily_job` をモックに差し替えて `main()` の組み立てを確認している。実際のサイト・
+    Claude API・DBを使った通し実行は未実施（ローカルでは `.env` に `ANTHROPIC_API_KEY` を追加して
+    `docker compose run backend python -m app.frameworks.daily_job` で確認する）
 - **分析できなかった記事は保存しない:** `ArticleAnalysisUnavailableError` の記事はDBに残さず、翌日に再挑戦させる
   （429・5xx等の一時的な失敗は自然に回復する）。拒否（`refusal`）された記事は毎日分析されて料金がかかるが、まれなため許容する。
   本文が長すぎる記事はAPIを呼ぶ前に判定するため料金はかからない
