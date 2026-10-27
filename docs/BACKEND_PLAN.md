@@ -90,7 +90,12 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
      ソース別の結果を表す `SourceResult`。`feat/phase1-process-daily-articles`）
    - ✅ 5-5. frameworks: `daily_job.py`（環境変数の読み込み・依存の組み立て・ログ設定・終了コード。`build_fetchers` /
      `decide_exit_code` / `run_daily_job` / `main`。`feat/phase1-daily-job`）
-   - ⬜ 5-6. 本ドキュメントの更新（実装状況・注意点）
+   - ✅ 5-6. 本ドキュメントの更新（実装状況・注意点。ローカルでの通し実行の結果は下記「通し実行の結果」参照）
+   - ⬜ 5-7. スバルの記事URLの修正（記事ページが末尾 `/` 付きのURLへ301で転送されるようになり、全件取得できない）
+   - ⬜ 5-8. ソースの記事がすべて本文の取得に失敗した場合の扱い（現状は終了コード0で気付けない。方針はユーザーと相談して決める）
+   - ⬜ 5-9. 三菱重工の対象を `/jp/news/` 配下に絞る（RSSに技術誌のページが混ざり、毎日WARNが出る）
+   - ⬜ 5-10. ACA Jobsへのデプロイ（Jobの作成・`DATABASE_URL`/`ANTHROPIC_API_KEY` のシークレット登録・
+     `deploy-backend.yml` でのJobのイメージ更新・本番（Neon）での初回実行）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す。ACA上のAPIをフロントエンドから呼ぶ）
 
 ### データソースに関する注意点（防衛省）
@@ -349,8 +354,24 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
     - 0: 一時的な取得失敗（`ArticleSourceUnavailableError`）・分析の失敗（`ArticleAnalysisUnavailableError`）のみ。翌日に
       自然に回復するため
   - 単体テストでは `SessionLocal` と `run_daily_job` をモックに差し替えて `main()` の組み立てを確認している。実際のサイト・
-    Claude API・DBを使った通し実行は未実施（ローカルでは `.env` に `ANTHROPIC_API_KEY` を追加して
-    `docker compose run backend python -m app.frameworks.daily_job` で確認する）
+    Claude API・DBを使った通し実行はローカルで実施済み（下記「通し実行の結果」参照）
+- **通し実行の結果（2026-10-27、ローカル）:** 保存先はローカルの `db` コンテナ（`.env` に `DATABASE_URL` がないため
+  `POSTGRES_*` で接続）で、Neonには保存していない。手順は、ルートの `.env` に `ANTHROPIC_API_KEY=...` を追加し
+  （`=` の前後に空白を入れない）、`docker compose up -d --wait db` →
+  `docker compose run --rm backend alembic upgrade head` → `docker compose run --rm backend python -m app.frameworks.daily_job`
+  - 1回目: 終了コード0、所要約2分。7ソースで計34件を保存（`mod`・`khi`・`ihi`・`melco`・`nec`・`hitachi` は各5件、
+    `mhi` は4件）。`subaru` は0件（ステップ5-7）、`mhi` の1件は技術誌のページのためスキップ（ステップ5-9）
+  - トークン数は34件で入力151,597・出力12,649（1件あたり平均入力約4,460・出力約370）。「カテゴリ判定＋要約の方針」の
+    想定（入力約3,000・出力約500）より入力が約1.5倍、出力が約0.75倍。実際の料金はConsoleのUsageで確認する
+  - カテゴリ該当は0件だった。今回の記事は部会の開催・大臣の出張（ADMMプラス）・船の引き渡し・ESG指数等で、装備品に関する
+    記事がなかったため、判定基準どおりと判断した。`mentions_price` は1件（三菱電機の合弁会社化）。要約は項目ごとに整理され、
+    該当しない項目は省略されていた
+  - 2回目: 保存済みの34件はすべて `already_stored` となり、Claude APIは1回も呼ばれなかった
+  - **Anthropic APIの残高不足は400で返る:** `ArticleAnalysisRequestError` として処理全体が中断し、終了コード1になる
+    （方針どおり）。APIの利用料はClaude Codeのサブスクリプションとは別で、Consoleでクレジットを購入しておく必要がある
+  - **依存を追加・更新したら、ローカルではイメージを作り直す:** `backend` サービスはソースをマウントするが、依存はイメージ内に
+    入っているため、`docker compose build backend` しないと `ModuleNotFoundError`（今回は `anthropic`）になる。
+    `.env.example` に `ANTHROPIC_API_KEY` の欄はまだない
 - **分析できなかった記事は保存しない:** `ArticleAnalysisUnavailableError` の記事はDBに残さず、翌日に再挑戦させる
   （429・5xx等の一時的な失敗は自然に回復する）。拒否（`refusal`）された記事は毎日分析されて料金がかかるが、まれなため許容する。
   本文が長すぎる記事はAPIを呼ぶ前に判定するため料金はかからない
