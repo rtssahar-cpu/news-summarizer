@@ -15,7 +15,9 @@ class ArticleFetcher(Protocol):
         個別記事の取得に失敗した場合は、その記事をスキップして残りを返す。
 
         Raises:
-            ArticleSourceUnavailableError: 取得元全体から記事を取得できない場合。
-            SourceStructureChangedError: 取得元のページ構造が想定と異なる場合。
+            ArticleSourceUnavailableError: 取得元全体から記事を取得できない場合
+                （試した記事の本文が、すべて一時的な原因で取得できなかった場合を含む）。
+            SourceStructureChangedError: 取得元のページ構造が想定と異なる場合
+                （試した記事の本文が、URLやページ構造の変更が疑われる原因を含んですべて取得できなかった場合を含む）。
         """
         ...

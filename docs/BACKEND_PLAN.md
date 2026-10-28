@@ -92,7 +92,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
      `decide_exit_code` / `run_daily_job` / `main`。`feat/phase1-daily-job`）
    - ✅ 5-6. 本ドキュメントの更新（実装状況・注意点。ローカルでの通し実行の結果は下記「通し実行の結果」参照）
    - ✅ 5-7. スバルの記事URLの修正（記事ページが末尾 `/` 付きのURLへ301で転送されるようになり、全件取得できなかった。`fix/subaru-article-url`）
-   - ⬜ 5-8. ソースの記事がすべて本文の取得に失敗した場合の扱い（現状は終了コード0で気付けない。方針はユーザーと相談して決める）
+   - ✅ 5-8. ソースの記事がすべて本文の取得に失敗した場合の扱い（失敗の原因で例外を分けて送出する。`article_body_failures.py`。
+     方針は下記「日次処理の方針」の「本文の取得がすべて失敗した場合」参照。`feat/phase1-detect-all-bodies-failed`）
    - ⬜ 5-9. 三菱重工の対象を `/jp/news/` 配下に絞る（RSSに技術誌のページが混ざり、毎日WARNが出る）
    - ⬜ 5-10. ACA Jobsへのデプロイ（Jobの作成・`DATABASE_URL`/`ANTHROPIC_API_KEY` のシークレット登録・
      `deploy-backend.yml` でのJobのイメージ更新・本番（Neon）での初回実行）
@@ -341,6 +342,16 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - 取得の失敗（`ArticleSourceUnavailableError` はWARN、`SourceStructureChangedError` はERROR）はそのソースだけ中断して次へ進む。
     処理全体を中断する例外は捕捉しない。それまでに保存した記事は記事ごとのコミットで残り、翌日は `already_stored` になる
   - ソースごとに `ソース 'mod' の処理結果: saved=1, already_stored=3, analysis_failed=1` の形式でINFOログを出す
+- **本文の取得がすべて失敗した場合（ステップ5-8）:** 2026-10-28にユーザーと合意。スバルの301（ステップ5-7）のように、
+  一覧には記事があるのに本文を1件も取得できない場合、以前は `[]` が返り終了コード0で気付けなかったため、fetcherが
+  ソース単位の例外を送出するようにした（共通処理は `article_body_failures.py`。8ソースのfetcherすべてに適用）
+  - 各fetcherは記事ごとの失敗（1記事につき最大1つ）をリストに溜め、ループの後に「1件も取得できず、失敗が1件以上」の場合のみ
+    `build_all_bodies_failed_error` の例外を送出する。一部の記事だけの失敗は従来どおりWARNでスキップする。
+    一覧自体が空の場合（スバルの年始・IHIの年度始め等）は試した記事がないため、従来どおり `[]` を返す
+  - **失敗の原因で例外を分ける:** すべて一時的な失敗（通信エラー・429・5xx）なら `ArticleSourceUnavailableError`
+    （WARN・終了コード0）。3xx・4xx・本文の抽出失敗を1件でも含めば、URLやページ構造の変更が疑われるため
+    `SourceStructureChangedError`（ERROR・終了コード1）。例外の理由には試した件数と最初の失敗を含める
+  - 防衛省は普段から約半数のPDFが404だが、最大15件試してすべて404なら、PDFのURLの組み立て方の変更とみなして終了コード1とする
 - **日次ジョブの入口（`app/frameworks/daily_job.py`）:** `python -m app.frameworks.daily_job` で起動する
   - `build_fetchers(client)`: 対象8ソース（`mod`・`mhi`・`khi`・`subaru`・`ihi`・`melco`・`nec`・`hitachi`。この順に処理）の
     ソース名→fetcherを返す。ソース名は各パーサーの `SOURCE_NAME` を使い、全fetcherで1つの `httpx.Client` を共有する
@@ -421,11 +432,11 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 ```
 ApplicationError（基底）
  ├── ExternalServiceError（外部起因 → WARN。放置 or リトライ。通知しない）
- │     ├── ArticleSourceUnavailableError   ソース全体から取得できない（一覧ページの取得失敗等）
+ │     ├── ArticleSourceUnavailableError   ソース全体から取得できない（一覧ページの取得失敗、本文がすべて一時的な失敗等）
  │     ├── ArticleContentUnavailableError  個別記事の本文を取得・抽出できない（PDFの破損等）
  │     └── ArticleAnalysisUnavailableError 個別記事をAIで分析できない（429・5xx・通信エラー、拒否・出力上限、本文が長すぎる）
  └── InternalError（自分起因 → ERROR。コードを直す。通知する）
-       ├── SourceStructureChangedError     取得元のページ構造が想定と異なる
+       ├── SourceStructureChangedError     取得元のページ構造が想定と異なる（本文の取得がすべて3xx・4xx・抽出失敗を含む場合も）
        ├── ArticleAnalysisRequestError     分析サービスがリクエスト自体を受け付けない（認証エラー・400）
        └── ArticleStorageError             記事の保存先（DB）の読み書きに失敗した（保存済みかの確認・保存）
 ```
