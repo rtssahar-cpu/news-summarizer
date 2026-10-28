@@ -12,13 +12,16 @@ NEWS_LIST_HTML = """
 </ul></div></div>
 """
 
-FIRST_ARTICLE_PATH = "/news/2026_10_05_171759"
+FIRST_ARTICLE_PATH = "/news/2026_10_05_171759/"
 
 
 def build_client(first_article_response: httpx.Response | None = None) -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/news/":
             return httpx.Response(200, text=NEWS_LIST_HTML)
+        if not request.url.path.endswith("/"):
+            # 実際のサイトと同様、末尾に / がない記事URLは / 付きのURLへ転送する
+            return httpx.Response(301, headers={"Location": f"{request.url}/"})
         if request.url.path == FIRST_ARTICLE_PATH and first_article_response is not None:
             return first_article_response
         return httpx.Response(200, text=f'<div id="text"><p>{request.url.path}の本文</p></div>')
@@ -33,7 +36,7 @@ def test_fetch_recent_articles_returns_articles_with_body() -> None:
 
     assert [(article.title, article.body) for article in articles] == [
         ("展示会に出展", f"{FIRST_ARTICLE_PATH}の本文"),
-        ("大会に協賛", "/news/2026_10_02_160447の本文"),
+        ("大会に協賛", "/news/2026_10_02_160447/の本文"),
     ]
     assert articles[0].source == "subaru"
     assert articles[0].url == f"https://www.subaru.co.jp{FIRST_ARTICLE_PATH}"

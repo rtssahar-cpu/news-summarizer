@@ -13,7 +13,7 @@ JST = timezone(timedelta(hours=9))
 # 一覧の各項目は <li><time>2026/10/05</time>...<p><a href="記事のパス">タイトル</a></p></li>
 NEWS_ITEM_SELECTOR = "div.component-newsList li"
 # 例: /news/2026_10_05_171759（決算発表は /ir/library/results.html へのリンクのため対象外）
-ARTICLE_PATH_PATTERN = re.compile(r"^/news/\d{4}_\d{2}_\d{2}_\d+$")
+ARTICLE_PATH_PATTERN = re.compile(r"^/news/\d{4}_\d{2}_\d{2}_\d+/?$")
 DATE_PATTERN = re.compile(r"^(\d{4})/(\d{2})/(\d{2})$")
 
 logger = logging.getLogger(__name__)
@@ -56,5 +56,6 @@ def _parse_item(item: Tag) -> SubaruNews | None:
     return SubaruNews(
         published_at=datetime(year, month, day, tzinfo=JST),
         title=link.get_text(strip=True),
-        article_url=f"{BASE_URL}{article_path}",
+        # 一覧のリンクは末尾に / がないが、記事ページは / 付きのURLへ301で転送されるため付け足す
+        article_url=f"{BASE_URL}{article_path.rstrip('/')}/",
     )
