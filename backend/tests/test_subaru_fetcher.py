@@ -23,7 +23,7 @@ def build_client(first_article_response: httpx.Response | None = None) -> httpx.
             # 実際のサイトと同様、末尾に / がない記事URLは / 付きのURLへ転送する
             return httpx.Response(301, headers={"Location": f"{request.url}/"})
         if request.url.path == FIRST_ARTICLE_PATH and first_article_response is not None:
-            return 
+            return first_article_response
         return httpx.Response(200, text=f'<div id="text"><p>{request.url.path}の本文</p></div>')
 
     return httpx.Client(transport=httpx.MockTransport(handler))
