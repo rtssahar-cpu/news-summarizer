@@ -1,4 +1,5 @@
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from email.utils import parsedate_to_datetime
@@ -10,6 +11,8 @@ from defusedxml.ElementTree import ParseError, fromstring
 from app.use_cases.errors import SourceStructureChangedError
 
 SOURCE_NAME = "mhi"
+# 例: /jp/news/261008.html、/jp/news/26102001.html（同じ日に複数の発表がある場合）
+NEWS_URL_PATTERN = re.compile(r"^https://www\.mhi\.com/jp/news/.+\.html$")
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,10 @@ def _parse_item(item: Element) -> MhiNews | None:
     pub_date_text = item.findtext("pubDate", default="").strip()
     if title_element is None or not article_url:
         logger.warning("タイトルまたはリンクがないためニュースをスキップ: %r", article_url)
+        return None
+    if NEWS_URL_PATTERN.match(article_url) is None:
+        # 技術誌（/jp/technology/review/）等はページ構造が異なり、本文を抽出できないため対象外
+        logger.debug("ニュース以外の項目のためスキップ: %r", article_url)
         return None
 
     try:

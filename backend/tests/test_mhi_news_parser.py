@@ -56,6 +56,20 @@ def test_parse_mhi_news_rss_skips_item_without_link() -> None:
     assert len(news_list) == 1
 
 
+def test_parse_mhi_news_rss_skips_item_outside_news() -> None:
+    technology_review_item = """
+    <item>
+      <title>三菱重工技報 最新号</title>
+      <link>https://www.mhi.com/jp/technology/review/</link>
+      <pubDate>Thu, 08 Oct 2026 11:00:00 +0900</pubDate>
+    </item>
+    """
+
+    news_list = parse_mhi_news_rss(build_rss(technology_review_item, SAMPLE_ITEM))
+
+    assert [news.article_url for news in news_list] == ["https://www.mhi.com/jp/news/261008.html"]
+
+
 def test_parse_mhi_news_rss_raises_when_no_item_found() -> None:
     with pytest.raises(SourceStructureChangedError, match="1件も抽出できません"):
         parse_mhi_news_rss(build_rss())
