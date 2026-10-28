@@ -94,7 +94,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 5-7. スバルの記事URLの修正（記事ページが末尾 `/` 付きのURLへ301で転送されるようになり、全件取得できなかった。`fix/subaru-article-url`）
    - ✅ 5-8. ソースの記事がすべて本文の取得に失敗した場合の扱い（失敗の原因で例外を分けて送出する。`article_body_failures.py`。
      方針は下記「日次処理の方針」の「本文の取得がすべて失敗した場合」参照。`feat/phase1-detect-all-bodies-failed`）
-   - ⬜ 5-9. 三菱重工の対象を `/jp/news/` 配下に絞る（RSSに技術誌のページが混ざり、毎日WARNが出る）
+   - ✅ 5-9. 三菱重工の対象を `/jp/news/` 配下に絞る（RSSに技術誌のページが混ざり、毎日WARNが出ていた。
+     `mhi_news_parser.py` の `NEWS_URL_PATTERN`。`fix/mhi-news-only`）
    - ⬜ 5-10. ACA Jobsへのデプロイ（Jobの作成・`DATABASE_URL`/`ANTHROPIC_API_KEY` のシークレット登録・
      `deploy-backend.yml` でのJobのイメージ更新・本番（Neon）での初回実行）
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す。ACA上のAPIをフロントエンドから呼ぶ）
@@ -134,6 +135,11 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 | NEC | `jpn.nec.com/press/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むRSS `/ja/press/press.xml` →記事ページのHTML解析（下記参照） |
 | 富士通 | `global.fujitsu/ja-jp/pr` | **対象外。** サイト全体が429（Vercel Security Checkpoint）でブロックされ、正規の取得経路がない（下記参照） |
 | 日立 | `hitachi.com/ja-jp/press/` | ✅実装済み。一覧はJSで描画されるため裏で読み込むJSON→記事PDF（下記参照） |
+
+#### 三菱重工
+
+- **対象は `/jp/news/*.html` 形式のリンクのみ:** RSSには技術誌（`/jp/technology/review/`）のページも混ざる（2026-10-28時点で
+  15件中1件）。ページ構造が異なり本文を抽出できず毎日WARNが出ていたため、RSSの解析時にDEBUGログを出してスキップする
 
 #### 川崎重工
 
