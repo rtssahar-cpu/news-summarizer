@@ -70,6 +70,28 @@ def test_fetch_recent_articles_skips_article_when_body_unavailable(
     ]
 
 
+@pytest.mark.parametrize(
+    ("article_response", "expected_error"),
+    [
+        (httpx.Response(503), ArticleSourceUnavailableError),
+        (httpx.Response(404), SourceStructureChangedError),
+    ],
+    ids=["http_503", "http_404"],
+)
+def test_fetch_recent_articles_raises_when_all_bodies_unavailable(
+    article_response: httpx.Response, expected_error: type[Exception]
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(".xml"):
+            return httpx.Response(200, text=NEWS_RSS)
+        return article_response
+
+    fetcher = NecPressReleaseFetcher(httpx.Client(transport=httpx.MockTransport(handler)))
+
+    with pytest.raises(expected_error, match="試した2件の記事本文をすべて"):
+        fetcher.fetch_recent_articles()
+
+
 def test_fetch_recent_articles_raises_when_rss_request_fails() -> None:
     client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(503)))
 
