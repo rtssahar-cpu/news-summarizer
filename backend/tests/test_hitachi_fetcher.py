@@ -88,6 +88,28 @@ def test_fetch_recent_articles_skips_article_when_body_unavailable(
     assert [article.title for article in fetcher.fetch_recent_articles()] == ["プログラムに参画"]
 
 
+@pytest.mark.parametrize(
+    ("article_response", "expected_error"),
+    [
+        (httpx.Response(503), ArticleSourceUnavailableError),
+        (httpx.Response(404), SourceStructureChangedError),
+    ],
+    ids=["http_503", "http_404"],
+)
+def test_fetch_recent_articles_raises_when_all_bodies_unavailable(
+    article_response: httpx.Response, expected_error: type[Exception]
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == NEWS_LIST_JSON_PATH:
+            return httpx.Response(200, text=NEWS_LIST_JSON)
+        return article_response
+
+    fetcher = HitachiNewsFetcher(httpx.Client(transport=httpx.MockTransport(handler)))
+
+    with pytest.raises(expected_error, match="試した2件の記事本文をすべて"):
+        fetcher.fetch_recent_articles()
+
+
 def test_fetch_recent_articles_raises_when_news_list_request_fails() -> None:
     client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(503)))
 
