@@ -23,7 +23,7 @@ def build_client(first_article_response: httpx.Response | None = None) -> httpx.
             # 実際のサイトと同様、末尾に / がない記事URLは / 付きのURLへ転送する
             return httpx.Response(301, headers={"Location": f"{request.url}/"})
         if request.url.path == FIRST_ARTICLE_PATH and first_article_response is not None:
-            return first_article_response
+            return 
         return httpx.Response(200, text=f'<div id="text"><p>{request.url.path}の本文</p></div>')
 
     return httpx.Client(transport=httpx.MockTransport(handler))
@@ -59,6 +59,29 @@ def test_fetch_recent_articles_skips_article_when_body_unavailable(
     fetcher = SubaruNewsReleaseFetcher(build_client(first_article_response))
 
     assert [article.title for article in fetcher.fetch_recent_articles()] == ["大会に協賛"]
+
+
+@pytest.mark.parametrize(
+    ("article_response", "expected_error"),
+    [
+        (httpx.Response(503), ArticleSourceUnavailableError),
+        # 記事URLの形式が変わり、記事ページがすべて転送されるようになった場合
+        (httpx.Response(301, headers={"Location": "/news/"}), SourceStructureChangedError),
+    ],
+    ids=["http_503", "redirect"],
+)
+def test_fetch_recent_articles_raises_when_all_bodies_unavailable(
+    article_response: httpx.Response, expected_error: type[Exception]
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/news/":
+            return httpx.Response(200, text=NEWS_LIST_HTML)
+        return article_response
+
+    fetcher = SubaruNewsReleaseFetcher(httpx.Client(transport=httpx.MockTransport(handler)))
+
+    with pytest.raises(expected_error, match="試した2件の記事本文をすべて"):
+        fetcher.fetch_recent_articles()
 
 
 def test_fetch_recent_articles_raises_when_news_list_request_fails() -> None:

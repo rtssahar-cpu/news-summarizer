@@ -84,6 +84,23 @@ def test_fetch_recent_articles_skips_html_article_when_body_unavailable(
     assert [article.body for article in fetcher.fetch_recent_articles()] == ["PDF Body"]
 
 
+@pytest.mark.parametrize(
+    ("pdf_response", "html_response", "expected_error"),
+    [
+        (httpx.Response(503), httpx.Response(503), ArticleSourceUnavailableError),
+        (httpx.Response(404), httpx.Response(503), SourceStructureChangedError),
+    ],
+    ids=["all_transient", "not_found_included"],
+)
+def test_fetch_recent_articles_raises_when_all_bodies_unavailable(
+    pdf_response: httpx.Response, html_response: httpx.Response, expected_error: type[Exception]
+) -> None:
+    fetcher = KhiPressReleaseFetcher(build_client(pdf_response, html_response))
+
+    with pytest.raises(expected_error, match="試した2件の記事本文をすべて"):
+        fetcher.fetch_recent_articles()
+
+
 def test_fetch_recent_articles_raises_when_rss_request_fails() -> None:
     client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(503)))
 
