@@ -3,6 +3,10 @@ import logging
 import httpx
 
 from app.entities.article import Article
+from app.interface_adapters.gateways.article_body_failures import (
+    ArticleBodyFailure,
+    build_all_bodies_failed_error,
+)
 from app.interface_adapters.gateways.http_headers import USER_AGENT
 from app.interface_adapters.gateways.mhi_article_parser import extract_mhi_article_body
 from app.interface_adapters.gateways.mhi_news_parser import SOURCE_NAME, parse_mhi_news_rss
@@ -20,11 +24,13 @@ class MhiPressReleaseFetcher:
     def fetch_recent_articles(self, limit: int = 5) -> list[Article]:
         news_list = parse_mhi_news_rss(self._fetch_news_rss())
         articles: list[Article] = []
+        body_failures: list[ArticleBodyFailure] = []
 
         for news in news_list[:limit]:
             try:
                 body = self._fetch_article_body(news.article_url)
             except (httpx.HTTPError, ArticleContentUnavailableError) as error:
+                body_failures.append(error)
                 logger.warning(
                     "記事本文の取得・抽出に失敗したため記事をスキップ: %s (%s)",
                     news.article_url,
@@ -43,6 +49,8 @@ class MhiPressReleaseFetcher:
                 )
             )
 
+        if not articles and body_failures:
+            raise build_all_bodies_failed_error(SOURCE_NAME, body_failures)
         return articles
 
     def _fetch_news_rss(self) -> str:

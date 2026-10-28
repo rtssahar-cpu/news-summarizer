@@ -3,6 +3,10 @@ import logging
 import httpx
 
 from app.entities.article import Article
+from app.interface_adapters.gateways.article_body_failures import (
+    ArticleBodyFailure,
+    build_all_bodies_failed_error,
+)
 from app.interface_adapters.gateways.http_headers import USER_AGENT
 from app.interface_adapters.gateways.mod_rss_parser import SOURCE_NAME, parse_mod_news_rss
 from app.interface_adapters.gateways.pdf_text import extract_pdf_text
@@ -22,6 +26,7 @@ class ModPressReleaseFetcher:
     def fetch_recent_articles(self, limit: int = 5) -> list[Article]:
         notices = parse_mod_news_rss(self._fetch_news_rss())
         articles: list[Article] = []
+        body_failures: list[ArticleBodyFailure] = []
 
         for notice in notices[: limit * MAX_ATTEMPTS_PER_ARTICLE]:
             if len(articles) >= limit:
@@ -30,6 +35,7 @@ class ModPressReleaseFetcher:
             try:
                 body = self._fetch_pdf_text(notice.pdf_url)
             except (httpx.HTTPError, ArticleContentUnavailableError) as error:
+                body_failures.append(error)
                 logger.warning(
                     "PDFの取得・抽出に失敗したため記事をスキップ: %s (%s)", notice.pdf_url, error
                 )
@@ -46,6 +52,8 @@ class ModPressReleaseFetcher:
                 )
             )
 
+        if not articles and body_failures:
+            raise build_all_bodies_failed_error(SOURCE_NAME, body_failures)
         return articles
 
     def _fetch_news_rss(self) -> str:

@@ -53,16 +53,20 @@ def test_fetch_recent_articles_respects_limit() -> None:
 
 
 @pytest.mark.parametrize(
-    "article_response",
-    [httpx.Response(500), httpx.Response(200, text="<p>本文フィールドなし</p>")],
+    ("article_response", "expected_error"),
+    [
+        (httpx.Response(500), ArticleSourceUnavailableError),
+        (httpx.Response(200, text="<p>本文フィールドなし</p>"), SourceStructureChangedError),
+    ],
     ids=["http_error", "body_field_missing"],
 )
-def test_fetch_recent_articles_skips_article_when_body_unavailable(
-    article_response: httpx.Response,
+def test_fetch_recent_articles_raises_when_all_bodies_unavailable(
+    article_response: httpx.Response, expected_error: type[Exception]
 ) -> None:
     fetcher = MhiPressReleaseFetcher(build_client(article_response))
 
-    assert fetcher.fetch_recent_articles(limit=5) == []
+    with pytest.raises(expected_error, match="試した2件の記事本文をすべて"):
+        fetcher.fetch_recent_articles(limit=5)
 
 
 def test_fetch_recent_articles_raises_when_rss_request_fails() -> None:
