@@ -29,6 +29,7 @@
 ### 構成
 - `backend/`: 詳細は `docs/BACKEND_PLAN.md` を参照
 - `frontend/`: React + Vite + TypeScript（npm、Biome で lint）
+- `infra/`: Terraform（Azure リソースの管理）。詳細は `docs/INFRA_PLAN.md` を参照
 - ローカル開発は `docker compose up`（db / backend / frontend）
 
 ### フロントエンドの完了の条件
@@ -44,3 +45,4 @@
 - 依存の追加・変更は `uv add` / `npm install` で行い、lock ファイルも必ずコミットする。新しいパッケージを追加する前にユーザーに確認する
 - Python / Node のメジャー・マイナー更新は `pyproject.toml`・mypy 設定・Dockerfile を合わせて手動で行う
 - **バックエンドのアーキテクチャ・レイヤールール・完了条件・CI/CD・実装ロードマップは `docs/BACKEND_PLAN.md` を参照すること（バックエンドのコードに触れる前に必読）**
+- **Azure リソースの追加・変更は手動ではなく Terraform（`infra/`）で行う。ルールと進捗は `docs/INFRA_PLAN.md` を参照すること（`infra/` に触れる前・Azure を操作する前に必読）。`terraform apply` はユーザーの確認後にユーザーが実行する**

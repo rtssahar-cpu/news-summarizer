@@ -35,6 +35,7 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
 - main への push で backend が変わっていれば、テスト・スモークテスト成功後に `deploy-backend.yml` が呼ばれ、ghcr.io にイメージを push した上で Azure Container Apps へデプロイされる（OIDC認証、シークレット不要）
 - デプロイ後に本番の `/health` の `version` がコミット SHA と一致するか確認する
 - インフラ（Container App の作成・シークレット・レプリカ数）は CI の管理外。ワークフローではイメージ更新のみ行う
+  （インフラは Terraform で管理し、手動で apply する。`docs/INFRA_PLAN.md` 参照）
 
 ## 外部サービス
 
@@ -97,7 +98,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 5-9. 三菱重工の対象を `/jp/news/` 配下に絞る（RSSに技術誌のページが混ざり、毎日WARNが出ていた。
      `mhi_news_parser.py` の `NEWS_URL_PATTERN`。`fix/mhi-news-only`）
    - ⬜ 5-10. ACA Jobsへのデプロイ（Jobの作成・`DATABASE_URL`/`ANTHROPIC_API_KEY` のシークレット登録・
-     `deploy-backend.yml` でのJobのイメージ更新・本番（Neon）での初回実行）
+     `deploy-backend.yml` でのJobのイメージ更新・本番（Neon）での初回実行）。Jobの設定は下記
+     「ACA Jobsのデプロイ方針（ステップ5-10）」、Terraformのルールと作業の進捗は `docs/INFRA_PLAN.md` 参照
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す。ACA上のAPIをフロントエンドから呼ぶ）
 
 ### データソースに関する注意点（防衛省）
@@ -399,6 +401,17 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - `ArticleAnalysisUnavailableError`: WARNを出し、その記事だけスキップする
   - `ArticleSourceUnavailableError`（WARN）・`SourceStructureChangedError`（ERROR）: そのソースだけ中断し、他のソースは続ける
   - `ArticleAnalysisRequestError`（認証エラー・400）と `ArticleStorageError`（DBの読み書きの失敗）: どの記事でも失敗するため、処理全体を中断する
+
+### ACA Jobsのデプロイ方針（ステップ5-10）
+
+2026-10-29にユーザーと合意した方針。
+
+- **Jobの設定:** 毎朝6:00 JST（cronはUTCで `0 21 * * *`）に実行する。失敗時の自動再実行はしない（retry-limit 0。
+  終了コード1はコードや設定の修正が必要な失敗のため、再実行しても直らない）。既存のContainer Appと同じ環境・同じイメージを使い、
+  起動コマンドだけ `python -m app.frameworks.daily_job` にする。`DATABASE_URL`（Neon）と `ANTHROPIC_API_KEY` は
+  Jobのシークレットに登録し、環境変数から参照させる
+- **失敗の通知（Azure Monitorのアラート等）は別のステップで行う**（まずJobが動くところまでを完了させる）
+- **Jobの作成・既存リソースの管理はTerraformで行う:** ルールと作業の進捗は `docs/INFRA_PLAN.md` を参照
 
 ### カテゴリ分類（`app/entities/category.py`）
 
