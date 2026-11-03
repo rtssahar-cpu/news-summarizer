@@ -1,0 +1,13 @@
+# provider のバイナリ等（.terraform.lock.hcl はコミットする）
+.terraform/
+
+# state は Azure Storage に置くため、ローカルのコピーはコミットしない
+*.tfstate
+*.tfstate.*
+
+# シークレットの値を含み得るため
+*.tfvars
+*.tfvars.json
+
+crash.log
+crash.*.log
