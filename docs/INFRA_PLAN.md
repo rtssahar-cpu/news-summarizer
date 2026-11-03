@@ -24,7 +24,7 @@ news-summarizerのAzureリソースをTerraformで管理するためのルール
 ## 運用のルール
 
 - **stateはAzure Storageに置く:** stateにはシークレットの値が平文で含まれるため、ローカルやリポジトリには置かない。
-  state用のストレージアカウントはTerraform自身では作れないため、`az` で手動作成する
+  state用のストレージアカウントはTerraform自身では作れないため、手動（Portalまたは `az`）で作成する
 - **`terraform apply` はユーザーの確認後に、ユーザーのPCから手動で実行する。** CIからの実行は現時点では行わない
 - **importや変更の前に `terraform plan` で差分を確認する:** importの際は、差分が0件になるまでコードを合わせてからapplyする
   （既存の設定を意図せず変えないため）
@@ -34,9 +34,13 @@ news-summarizerのAzureリソースをTerraformで管理するためのルール
 
 ## 進捗（ACA Jobsのデプロイ。`docs/BACKEND_PLAN.md` のステップ5-10）
 
-1. ⬜ Terraformの導入（HashiCorpの公式aptリポジトリ）・`az login`
-2. ⬜ state用のストレージアカウントの作成（`az`。コマンドはClaudeが用意し、ユーザーが実行）
-3. ⬜ `infra/` の土台（provider・backend・バージョンの固定・`.gitignore`）
+1. 🔄 Terraformの導入（HashiCorpの公式aptリポジトリ。v1.17.1を導入済み）・`az login`（Claude Codeのセッションからは
+   未ログインのため、要確認）
+2. ✅ state用のストレージアカウントの作成（2026-11-03、ユーザーがPortalで作成）
+   - ストレージアカウント `stnewssumtfstate`（リソースグループ `news-summarizer-rg`）・コンテナ `tfstate`（プライベート）
+   - Standard・LRS・BLOBの匿名アクセスはオフ・最小TLS 1.2・BLOBのバージョン管理はオン・論理的な削除は7日
+   - ストレージアカウントキーのアクセスはオン（Entra ID認証に切り替える場合は、自分に「ストレージ BLOB データ共同作成者」が必要）
+3. ⬜ `infra/` の土台（provider・backend・バージョンの固定・`.gitignore`）。azurermは5.x（2026-11-03時点の最新は5.12.0）
 4. ⬜ 既存リソースのimport（`plan` の差分0件を確認してからapply）
 5. ⬜ Jobの追加
 6. ⬜ `deploy-backend.yml` に `az containerapp job update --image` を追加（OIDCのサービスプリンシパルにJobを更新する
