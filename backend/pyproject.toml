@@ -3,27 +3,27 @@ name = "news-summarizer-backend"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-   "alembic==1.20.0",
-    "anthropic>=2.1.0",
+   "alembic==1.20.1",
+    "anthropic>=2.8.0",
    "beautifulsoup4==4.15.0",
     "cryptography==50.0.2",
     "defusedxml==0.7.1",
-    "fastapi==0.161.1",
+    "fastapi==0.162.5",
     "httpx==0.28.1",
-    "psycopg[binary]==3.3.6",
+    "psycopg[binary]==3.3.9",
    "pypdf==6.21.2",
-    "sqlalchemy==2.1.6",
+    "sqlalchemy==2.1.8",
    "uvicorn[standard]==0.54.0",
 ]
 
 [dependency-groups]
 dev = [
     "httpx2==2.16.0",
-    "import-linter==2.15",
-    "mypy==2.4.0",
-    "pytest==9.1.1",
+    "import-linter==2.16",
+    "mypy==2.4.1",
+    "pytest==9.2.0",
     "pytest-cov==7.1.0",
-    "ruff==0.17.2",
+    "ruff==0.17.5",
     "types-defusedxml==0.7.0.20260504",
 ]
 
