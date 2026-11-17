@@ -19,7 +19,12 @@ news-summarizerのAzureリソースをTerraformで管理するためのルール
 - Terraformのバージョンは `required_version`、providerのバージョンは `.terraform.lock.hcl` で固定する（lockファイルはコミットする）
 - App・Jobのイメージは `deploy-backend.yml` が更新するため、`lifecycle { ignore_changes }` でTerraformの管理から外す
   （外さないと、`plan` のたびにイメージを古いタグへ戻そうとする）
-- シークレットの値はコードや `*.tfvars` に書かず、コミットしない
+- シークレットの値はコードや `*.tfvars` に書かず、コミットしない。sensitiveな変数（`variables.tf`）にして、値は
+  `TF_VAR_*` の環境変数で渡す（2026-11-08にユーザーと合意）
+  - 値はdev-vmのリポジトリ外のファイル `~/.config/news-summarizer/terraform.env`（権限600）に置き、`plan`・`apply` の前に
+    `source` で読み込む。作成は `infra/scripts/create-terraform-env.sh`（`database_url` は既存のAppのシークレットから取得し、
+    `anthropic_api_key` は入力させる。値は画面に表示しない）
+  - Container Appsのシークレットは App・Job ごとに登録する必要がある（共有できない）が、コード上は同じ変数を参照する
 
 ## 運用のルール
 
@@ -44,8 +49,12 @@ news-summarizerのAzureリソースをTerraformで管理するためのルール
    - ストレージアカウントキーのアクセスはオン（Entra ID認証に切り替える場合は、自分に「ストレージ BLOB データ共同作成者」が必要）
 3. ✅ `infra/` の土台（`versions.tf`・`providers.tf`・`.gitignore`・`.terraform.lock.hcl`。azurerm 5.12.0。`chore/terraform-setup`）
    - 確認手順: `cd infra && ARM_USE_MSI=true terraform init && terraform fmt -check && terraform validate && terraform plan`
-4. ⬜ 既存リソースのimport（`plan` の差分0件を確認してからapply）。対象は `news-summarizer-rg`・Log Analytics
+4. ✅ 既存リソースのimport（`plan` の差分0件を確認してからapply）。対象は `news-summarizer-rg`・Log Analytics
    `news-summarizer-env-logs`・Container Apps環境 `news-summarizer-env`・Container App `news-summarizer-backend`
+   - ✅ リソースグループ・Log Analytics・環境（2026-11-17にapply済み）
+   - ✅ Container App（2026-11-17にapply済み）
+   - コードは `plan -generate-config-out` で生成し、既定値と同じ項目を省いて整理した（生成されるコードにシークレットの値は
+     含まれない）。`import` ブロック（`imports.tf`）はapply後も残してよい（取り込み済みなら何もしない）
 5. ⬜ Jobの追加
 6. ⬜ `deploy-backend.yml` に `az containerapp job update --image` を追加（OIDCのサービスプリンシパルにJobを更新する
    権限があるかも確認する）
