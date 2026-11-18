@@ -10,6 +10,7 @@ env:
   HEAD_SHA: ${{ github.sha }} # CI がテストしたコミット
   RESOURCE_GROUP: news-summarizer-rg
   ACA_APP: news-summarizer-backend
+  ACA_JOB: news-summarizer-daily-job
 
 jobs:
   deploy:
@@ -106,3 +107,12 @@ jobs:
           done
           echo "::error::$health_url did not return version $HEAD_SHA within 3 minutes"
           exit 1
+
+      # 日次処理の Job も同じイメージにそろえる。壊れたイメージで定期実行されないよう、App のスモークテスト成功後に行う
+      - name: Update daily job image
+        if: steps.latest.outputs.is-latest == 'true'
+        run: |
+          az containerapp job update \
+            --name "$ACA_JOB" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$IMAGE:$HEAD_SHA"
