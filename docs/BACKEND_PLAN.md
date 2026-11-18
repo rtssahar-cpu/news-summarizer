@@ -80,7 +80,7 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 4-5. gateway: 構造化出力のスキーマと `ArticleAnalysis` への変換（`article_analysis_output.py`）、API呼び出し・例外の変換
      （`claude_article_analyzer.py` の `ClaudeArticleAnalyzer`。`feat/phase1-analysis-output-schema`）
    - ✅ 4-6. 本ドキュメントの更新（実装状況・注意点）
-5. ⬜ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる。方針は下記「日次処理の方針」参照）
+5. ✅ 日次処理ユースケース（各ソースから5件程度取得→本文取得→分類・要約→DB保存、を束ねる。方針は下記「日次処理の方針」参照）
    - ✅ 5-1. use_cases: ポート `ArticleRepository`（Protocol。`article_repository.py` の `exists_by_url` / `save_with_analysis`）と、
      保存先の読み書きの失敗を表す例外（`errors.py` の `ArticleStorageError`。`feat/phase1-article-repository-port`）
    - ✅ 5-2. gateway: SQLAlchemyによる `ArticleRepository` の実装（`sqlalchemy_article_repository.py` の
@@ -101,6 +101,14 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
      `deploy-backend.yml` でのJobのイメージ更新・本番（Neon）での初回実行。2026-11-18に初回実行し、Neonに40件保存）。Jobの設定は下記
      「ACA Jobsのデプロイ方針（ステップ5-10）」、Terraformのルールと作業の進捗は `docs/INFRA_PLAN.md` 参照
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す。ACA上のAPIをフロントエンドから呼ぶ）
+   方針は下記「APIエンドポイントの方針（ステップ6）」参照
+   - ✅ 6-1. use_cases: 一覧表示用の読み出しモデル `SummarizedArticle` と、読み出し用のポート `ArticleSummaryReader`
+     （Protocol。`article_summary_reader.py` の `list_summarized_between`。`feat/phase1-article-summary-reader`）
+   - ⬜ 6-2. gateway: SQLAlchemyによる `ArticleSummaryReader` の実装（Sessionを注入。`SQLAlchemyError` は `ArticleStorageError` に変換）
+   - ⬜ 6-3. use_cases: 指定日（JST）の要約一覧を返すユースケース（日付→期間の変換を担う）
+   - ⬜ 6-4. controller: FastAPIのルーター・レスポンススキーマと、`ApplicationError` をHTTPレスポンスに変換する例外ハンドラー
+   - ⬜ 6-5. frameworks: `asgi.py` でのSession・ユースケースの組み立て
+   - ⬜ 6-6. 本ドキュメントの更新（実装状況・注意点）
 
 ### データソースに関する注意点（防衛省）
 
@@ -411,6 +419,20 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   Jobのシークレットに登録し、環境変数から参照させる
 - **失敗の通知（Azure Monitorのアラート等）は別のステップで行う**（まずJobが動くところまでを完了させる）
 - **Jobの作成・既存リソースの管理はTerraformで行う:** ルールと作業の進捗は `docs/INFRA_PLAN.md` を参照
+
+### APIエンドポイントの方針（ステップ6）
+
+2026-11-18にユーザーと合意した方針。CORS（ロードマップC）と認証（E）はステップ6に含めず、別に行う。
+
+- **エンドポイント:** `GET /articles?date=YYYY-MM-DD`。`date` を省略した場合は今日（JST）
+- **「その日」は要約した日（JST）:** `Summary.created_at` の日本時間の日付で絞り込む。日次処理は各ソースの最新数件を見るため、
+  発表日が数日前の記事もその朝に初めて要約されることがある。要約した日で絞ると「今朝新しく要約された記事」の一覧になり、
+  同じ記事が2日にわたって出ることもない
+- **カテゴリに該当しない記事も返す:** 該当する記事だけにすると一覧が空の日が多くなるため（ローカルの通し実行では34件中0件）。
+  カテゴリも一緒に返し、表示の分け方や絞り込みはフロントエンド側で行う
+- **本文は返さない:** 本文は最大20万文字あり、一覧で使わないため。全文は元記事のURLで読む。必要になれば詳細APIを追加する
+  （一度返したフィールドを後から削るとフロントエンドが壊れるため、迷ったら返さない）
+- **並び順:** 発表日の新しい順
 
 ### カテゴリ分類（`app/entities/category.py`）
 
