@@ -25,6 +25,9 @@ news-summarizerのAzureリソースをTerraformで管理するためのルール
     `source` で読み込む。作成は `infra/scripts/create-terraform-env.sh`（`database_url` は既存のAppのシークレットから取得し、
     `anthropic_api_key` は入力させる。値は画面に表示しない）
   - Container Appsのシークレットは App・Job ごとに登録する必要がある（共有できない）が、コード上は同じ変数を参照する
+- **構成図（`docs/architecture.drawio`）も合わせて更新する:** リソースの追加・削除や、通信経路・認証方法などネットワーク構成に
+  関わる変更をする場合は、同じPRで構成図も更新する（2026-11-18にユーザーと合意）
+  - 破線は「予定・未作成」、実線は「稼働中」を表す。予定のリソースを作成したら実線に変える
 
 ## 運用のルール
 
