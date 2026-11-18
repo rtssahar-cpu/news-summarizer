@@ -6,3 +6,9 @@ variable "database_url" {
   type        = string
   sensitive   = true
 }
+
+variable "anthropic_api_key" {
+  description = "Claude API のキー（Job の ANTHROPIC_API_KEY）"
+  type        = string
+  sensitive   = true
+}

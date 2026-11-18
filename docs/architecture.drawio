@@ -29,7 +29,7 @@
         <mxCell id="app" value="&lt;b&gt;Container App&lt;/b&gt;&lt;br&gt;news-summarizer-backend&lt;br&gt;FastAPI・外部 ingress（HTTPS）・0〜1 レプリカ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#0078D4;" vertex="1" parent="1">
           <mxGeometry x="360" y="250" width="260" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="job" value="&lt;b&gt;Container Apps Job&lt;/b&gt;（日次処理）&lt;br&gt;毎朝 6:00 JST・※作成予定" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;dashed=1;" vertex="1" parent="1">
+        <mxCell id="job" value="&lt;b&gt;Container Apps Job&lt;/b&gt;（日次処理）&lt;br&gt;毎朝 6:00 JST" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;" vertex="1" parent="1">
           <mxGeometry x="360" y="370" width="260" height="70" as="geometry" />
         </mxCell>
         <mxCell id="law" value="Log Analytics&lt;br&gt;news-summarizer-env-logs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1F0E0;strokeColor=#5A9E4B;" vertex="1" parent="1">
@@ -84,7 +84,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-job-neon" value="PostgreSQL（TLS）" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=block;" edge="1" parent="1" source="job" target="neon">
+        <mxCell id="e-job-neon" value="PostgreSQL（TLS）" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" parent="1" source="job" target="neon">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="1030" y="390" />
@@ -92,7 +92,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-job-anth" value="HTTPS（分類・要約）" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=block;" edge="1" parent="1" source="job" target="anth">
+        <mxCell id="e-job-anth" value="HTTPS（分類・要約）" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" parent="1" source="job" target="anth">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="1060" y="410" />
@@ -100,7 +100,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e-job-src" value="HTTPS（記事の取得）" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;endArrow=block;" edge="1" parent="1" source="job" target="src">
+        <mxCell id="e-job-src" value="HTTPS（記事の取得）" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" parent="1" source="job" target="src">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="1060" y="425" />
