@@ -25,6 +25,8 @@ news-summarizerのAzureリソースをTerraformで管理するためのルール
     `source` で読み込む。作成は `infra/scripts/create-terraform-env.sh`（`database_url` は既存のAppのシークレットから取得し、
     `anthropic_api_key` は入力させる。値は画面に表示しない）
   - Container Appsのシークレットは App・Job ごとに登録する必要がある（共有できない）が、コード上は同じ変数を参照する
+  - `plan`・`apply` で変数の値の入力を求められた場合は、`source` が効いていない（Terraformは値のない変数を対話形式で
+    聞いてくる）。手入力すると打ち間違いでシークレットが書き換わるおそれがあるため、Ctrl+Cで中断して `source` し直す
 - **構成図（`docs/architecture.drawio`）も合わせて更新する:** リソースの追加・削除や、通信経路・認証方法などネットワーク構成に
   関わる変更をする場合は、同じPRで構成図も更新する（2026-11-18にユーザーと合意）
   - 破線は「予定・未作成」、実線は「稼働中」を表す。予定のリソースを作成したら実線に変える
@@ -58,7 +60,9 @@ news-summarizerのAzureリソースをTerraformで管理するためのルール
    - ✅ Container App（2026-11-17にapply済み）
    - コードは `plan -generate-config-out` で生成し、既定値と同じ項目を省いて整理した（生成されるコードにシークレットの値は
      含まれない）。`import` ブロック（`imports.tf`）はapply後も残してよい（取り込み済みなら何もしない）
-5. ⬜ Jobの追加
+5. ✅ Jobの追加（`job.tf` の `news-summarizer-daily-job`。2026-11-18にapply済み）
+   - CPU・メモリはAppと同じ0.5・1Gi。タイムアウトは30分（通常は数分、40記事を順番に処理しても十数分のため）
+   - `ANTHROPIC_API_KEY` は sensitive な変数 `anthropic_api_key` で渡す（`terraform.env` に作成済み）
 6. ⬜ `deploy-backend.yml` に `az containerapp job update --image` を追加（OIDCのサービスプリンシパルにJobを更新する
    権限があるかも確認する）
 7. ⬜ 本番での初回の手動実行（`az containerapp job start`）・ログとNeonへの保存の確認・ドキュメントの更新
