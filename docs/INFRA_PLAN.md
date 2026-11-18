@@ -63,7 +63,11 @@ news-summarizerのAzureリソースをTerraformで管理するためのルール
 5. ✅ Jobの追加（`job.tf` の `news-summarizer-daily-job`。2026-11-18にapply済み）
    - CPU・メモリはAppと同じ0.5・1Gi。タイムアウトは30分（通常は数分、40記事を順番に処理しても十数分のため）
    - `ANTHROPIC_API_KEY` は sensitive な変数 `anthropic_api_key` で渡す（`terraform.env` に作成済み）
-6. ⬜ `deploy-backend.yml` に `az containerapp job update --image` を追加（OIDCのサービスプリンシパルにJobを更新する
-   権限があるかも確認する）
-7. ⬜ 本番での初回の手動実行（`az containerapp job start`）・ログとNeonへの保存の確認・ドキュメントの更新
-   （`.env.example` に `ANTHROPIC_API_KEY` の欄を追加することも含む）
+6. ✅ `deploy-backend.yml` に `az containerapp job update --image` を追加（2026-11-18。`chore/deploy-job-image`）
+   - Appのスモークテスト成功後に実行する（壊れたイメージで定期実行されないようにするため）
+   - OIDCのサービスプリンシパルは `news-summarizer-rg` 以上のスコープでロールを持つため、ロールの追加は不要だった
+     （Appだけに限ったロールの割り当ては無かった）。マージ後のデプロイでJobのイメージが更新されることを確認した
+7. ✅ 本番での初回の手動実行（2026-11-18。`az containerapp job start`）
+   - 成功（所要約3分）。8ソースで各5件、計40件をNeonに保存した（`analysis_failed` は0件）
+   - ログはLog Analyticsの `ContainerAppConsoleLogs_CL`（`ContainerJobName_s == 'news-summarizer-daily-job'`）で見られる。
+     ただし今回は一部の行（ソースごとの処理結果の一部）が届いていなかったため、件数はNeonで確認した

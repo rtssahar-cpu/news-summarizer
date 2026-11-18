@@ -97,8 +97,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
      方針は下記「日次処理の方針」の「本文の取得がすべて失敗した場合」参照。`feat/phase1-detect-all-bodies-failed`）
    - ✅ 5-9. 三菱重工の対象を `/jp/news/` 配下に絞る（RSSに技術誌のページが混ざり、毎日WARNが出ていた。
      `mhi_news_parser.py` の `NEWS_URL_PATTERN`。`fix/mhi-news-only`）
-   - ⬜ 5-10. ACA Jobsへのデプロイ（Jobの作成・`DATABASE_URL`/`ANTHROPIC_API_KEY` のシークレット登録・
-     `deploy-backend.yml` でのJobのイメージ更新・本番（Neon）での初回実行）。Jobの設定は下記
+   - ✅ 5-10. ACA Jobsへのデプロイ（Jobの作成・`DATABASE_URL`/`ANTHROPIC_API_KEY` のシークレット登録・
+     `deploy-backend.yml` でのJobのイメージ更新・本番（Neon）での初回実行。2026-11-18に初回実行し、Neonに40件保存）。Jobの設定は下記
      「ACA Jobsのデプロイ方針（ステップ5-10）」、Terraformのルールと作業の進捗は `docs/INFRA_PLAN.md` 参照
 6. ⬜ APIエンドポイント（フロントエンド向けに、その日の要約一覧を返す。ACA上のAPIをフロントエンドから呼ぶ）
 
@@ -392,8 +392,7 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   - **Anthropic APIの残高不足は400で返る:** `ArticleAnalysisRequestError` として処理全体が中断し、終了コード1になる
     （方針どおり）。APIの利用料はClaude Codeのサブスクリプションとは別で、Consoleでクレジットを購入しておく必要がある
   - **依存を追加・更新したら、ローカルではイメージを作り直す:** `backend` サービスはソースをマウントするが、依存はイメージ内に
-    入っているため、`docker compose build backend` しないと `ModuleNotFoundError`（今回は `anthropic`）になる。
-    `.env.example` に `ANTHROPIC_API_KEY` の欄はまだない
+    入っているため、`docker compose build backend` しないと `ModuleNotFoundError`（今回は `anthropic`）になる
 - **分析できなかった記事は保存しない:** `ArticleAnalysisUnavailableError` の記事はDBに残さず、翌日に再挑戦させる
   （429・5xx等の一時的な失敗は自然に回復する）。拒否（`refusal`）された記事は毎日分析されて料金がかかるが、まれなため許容する。
   本文が長すぎる記事はAPIを呼ぶ前に判定するため料金はかからない
