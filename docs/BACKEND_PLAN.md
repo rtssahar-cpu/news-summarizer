@@ -109,7 +109,9 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
      `feat/phase1-article-summary-reader`）
    - ✅ 6-3. use_cases: 指定日（JST）の要約一覧を返すユースケース（`list_summarized_articles.py` の
      `SummarizedArticleLister`。日付→期間の変換を担う。`feat/phase1-article-summary-reader`）
-   - ⬜ 6-4. controller: FastAPIのルーター・レスポンススキーマと、`ApplicationError` をHTTPレスポンスに変換する例外ハンドラー
+   - ✅ 6-4. controller: FastAPIのルーター（`articles_controller.py` の `build_articles_router`）・レスポンススキーマ
+     （`article_schemas.py`）と、`ApplicationError` をHTTPレスポンスに変換する例外ハンドラー（`error_handlers.py` の
+     `register_error_handlers`）。`feat/phase1-articles-api`
    - ⬜ 6-5. frameworks: `asgi.py` でのSession・ユースケースの組み立て
    - ⬜ 6-6. 本ドキュメントの更新（実装状況・注意点）
 
@@ -444,6 +446,17 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
   追加クエリを避けるため）。発表日が同じ記事は `id` の降順で並べ、順序を一定にする。単体テストはSessionをモックにしており、
   実DBでの動作はローカルの `db` コンテナで確認済み（2026-10-27 15:26 UTC〜に要約した34件が、JSTの2026-10-28の範囲で
   発表日の新しい順に返り、該当なしの期間は空のタプルになった）
+- **レスポンスの形:** 日付付きで包み、フィールド名はsnake_case（2026-11-25にユーザーと合意）。`date` は一覧の対象日（JST）で、
+  `date` を省略した場合もどの日の一覧かをフロントエンドが分かるようにするため。後から項目を足しても既存の読み取りが壊れない
+  ```json
+  {"date": "2026-11-18", "articles": [{"article_id": 1, "source": "mod", "url": "...", "title": "...",
+    "published_at": "2026-11-18T00:00:00+09:00", "summary_text": "...", "matched_categories": ["standoff_missile"],
+    "mentions_price": false, "mentions_israel": false, "summarized_at": "2026-11-17T21:00:00Z"}]}
+  ```
+  - `date` の形式が `YYYY-MM-DD` でない場合は、FastAPIの検証により422を返す
+- **ルーターへのユースケースの注入:** `build_articles_router` は、リクエストごとに `SummarizedArticleLister` を `yield` する
+  ジェネレーター関数（FastAPIの依存関数）を受け取る。`yield` の後でSessionを閉じられるようにするため。Sessionの生成と
+  ユースケースの組み立ては `asgi.py` が担う（ステップ6-5）
 
 ### カテゴリ分類（`app/entities/category.py`）
 
@@ -507,5 +520,7 @@ ApplicationError（基底）
 - **個別記事の失敗**（`ArticleContentUnavailableError`、PDF取得の通信エラー）: 警告ログを出してその記事だけスキップし、
   処理を継続する
 - **ソース単位の失敗**（`ArticleSourceUnavailableError`、`SourceStructureChangedError`）: 握りつぶさず上位へ伝搬させる
-- **APIのエラーレスポンス**: FastAPIの例外ハンドラーで `ApplicationError` をHTTPレスポンスに変換する。
-  APIエンドポイント（フェーズ1のステップ6）の実装時に合わせて行う（未着手）
+- **APIのエラーレスポンス**: FastAPIの例外ハンドラー（`app/interface_adapters/controllers/error_handlers.py`）で
+  `ApplicationError` をHTTPレスポンスに変換する。`ExternalServiceError` は503・WARN、それ以外は500・ERROR。
+  本文は `{"detail": "..."}` の固定の文言とし、エラーの内容（DBのエラー等）は外に出さずログにだけ出す（2026-11-25にユーザーと合意）。
+  アプリへの登録は `asgi.py` で行う（ステップ6-5）
