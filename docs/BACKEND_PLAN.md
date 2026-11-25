@@ -107,7 +107,8 @@ uv run pytest --cov    # カバレッジ 80% 未満は失敗
    - ✅ 6-2. gateway: SQLAlchemyによる `ArticleSummaryReader` の実装（`sqlalchemy_article_summary_reader.py` の
      `SqlAlchemyArticleSummaryReader`。Sessionを注入。`SQLAlchemyError` は `ArticleStorageError` に変換。
      `feat/phase1-article-summary-reader`）
-   - ⬜ 6-3. use_cases: 指定日（JST）の要約一覧を返すユースケース（日付→期間の変換を担う）
+   - ✅ 6-3. use_cases: 指定日（JST）の要約一覧を返すユースケース（`list_summarized_articles.py` の
+     `SummarizedArticleLister`。日付→期間の変換を担う。`feat/phase1-article-summary-reader`）
    - ⬜ 6-4. controller: FastAPIのルーター・レスポンススキーマと、`ApplicationError` をHTTPレスポンスに変換する例外ハンドラー
    - ⬜ 6-5. frameworks: `asgi.py` でのSession・ユースケースの組み立て
    - ⬜ 6-6. 本ドキュメントの更新（実装状況・注意点）
@@ -435,6 +436,10 @@ RSSでお知らせ一覧を取得→PDFテキスト抽出、という経路で�
 - **本文は返さない:** 本文は最大20万文字あり、一覧で使わないため。全文は元記事のURLで読む。必要になれば詳細APIを追加する
   （一度返したフィールドを後から削るとフロントエンドが壊れるため、迷ったら返さない）
 - **並び順:** 発表日の新しい順
+- **一覧取得のユースケース（`SummarizedArticleLister`）:** `list_for(day)` で、`day` の0時（JST）から翌日0時までを
+  `ArticleSummaryReader` に渡す。`day` を省略した場合の「今日（JST）」の判定もユースケースが担う（日付の区切りは業務上のルールのため）。
+  現在時刻は `clock`（タイムゾーン付きの日時を返す関数）として注入し、テストで固定できるようにしている。
+  `ArticleStorageError` は捕捉せず呼び出し元（controller）へ伝える
 - **読み出しの実装（`SqlAlchemyArticleSummaryReader`）:** 記事と要約は `contains_eager` で1回のクエリで読み出す（記事ごとの
   追加クエリを避けるため）。発表日が同じ記事は `id` の降順で並べ、順序を一定にする。単体テストはSessionをモックにしており、
   実DBでの動作はローカルの `db` コンテナで確認済み（2026-10-27 15:26 UTC〜に要約した34件が、JSTの2026-10-28の範囲で
