@@ -36,3 +36,13 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApplicationError)
     async def handle_application_error(_request: Request, error: ApplicationError) -> JSONResponse:
         return application_error_to_response(error)
+
+    # 想定外の例外（TypeError等）も、本文の形を {"detail": ...} にそろえる。
+    # ログはここで出さない（Starletteが応答の後に例外を投げ直し、
+    # uvicornがトレースバックをERRORで出すため）
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(_request: Request, _error: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": INTERNAL_ERROR_DETAIL},
+        )
