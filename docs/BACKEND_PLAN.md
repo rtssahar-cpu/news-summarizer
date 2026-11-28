@@ -524,3 +524,9 @@ ApplicationError（基底）
   `ApplicationError` をHTTPレスポンスに変換する。`ExternalServiceError` は503・WARN、それ以外は500・ERROR。
   本文は `{"detail": "..."}` の固定の文言とし、エラーの内容（DBのエラー等）は外に出さずログにだけ出す（2026-11-25にユーザーと合意）。
   アプリへの登録は `asgi.py` で行う（ステップ6-5）
+  - 想定外の例外（`TypeError` 等）も、`Exception` のハンドラーで500・同じ形の `{"detail": "..."}` にそろえる（フロントエンドが
+    500番台をいつもJSONとして読めるようにするため。2026-11-28にユーザーと合意）。このハンドラーではログを出さない
+    （Starletteが応答の後に例外を投げ直し、uvicornがトレースバックをERRORで出すため）。テストでは
+    `TestClient(app, raise_server_exceptions=False)` にする
+  - アプリより手前（Azure Container Appsの502等）が返すエラーはJSONにならない。フロントエンドはJSONとして読めない
+    エラー応答も扱えるようにすること
